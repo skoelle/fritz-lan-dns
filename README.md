@@ -251,6 +251,15 @@ RCODE der FRITZ!Box-Antwort. `NXDOMAIN` bedeutet, die FRITZ!Box kennt den
 Namen nicht; `NOERROR` bedeutet, sie hat geantwortet (Treffer oder NODATA),
 der Cache aber nicht.
 
+Beispielausgabe (gekürzt, generische Testwerte):
+
+```text
+[INFO] gibtsnicht.example.test. A NXDOMAIN
+[INFO] printer.example.test. A NOERROR
+```
+
+Im echten Log steht statt `example.test` die konfigurierte `<dns-domain>`.
+
 Die Zeilen landen im Docker-Log des `coredns`-Containers. Empfohlen ist der
 Standard-Logging-Driver `json-file` mit Rotation (im Compose-Beispiel gesetzt);
 lesen lässt sich das mit:

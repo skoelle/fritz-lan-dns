@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parent.parent
 # strings as plain literals.
 FORBIDDEN = [
     "moon" + "web.lan",
-    "192." + "168.178",
+    "192." + "168.",
     "fritz" + "8254",
     "direct" + "0r",
     "Server" + "raum",
