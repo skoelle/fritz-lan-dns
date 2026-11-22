@@ -58,7 +58,13 @@ class FakeOpenWrt:
                     "ipaddr": "192.0.2.150",
                     "hostname": "owrt-nas",
                     "expires": 100,
-                }
+                },
+                {
+                    "macaddr": "AA:BB:CC:00:00:02",
+                    "ipaddr": "192.0.2.152",
+                    "hostname": "printer",
+                    "expires": 100,
+                },
             ],
             "dhcp6_leases": [],
         }
@@ -89,13 +95,30 @@ def test_run_fetch_includes_openwrt_hosts(tmp_path: Path, monkeypatch) -> None:
 
     result = run_fetch(settings)
 
-    assert result["openwrt_hosts"] == 2
+    assert result["openwrt_hosts"] == 3
     hosts_text = settings.hosts_file.read_text(encoding="utf-8")
     assert "owrt-nas.example.test" in hosts_text
     assert "owrt-printer.example.test" in hosts_text
+    assert "192.0.2.50 printer.example.test" in hosts_text
+    assert "192.0.2.152 printer.example.test" in hosts_text
     with db.connect(settings.db_path) as conn:
-        hosts = {host.hostname: host for host in db.load_hosts(conn)}
+        loaded_hosts = db.load_hosts(conn)
+        hosts = {host.hostname: host for host in loaded_hosts}
         assert hosts["owrt-nas"].source == "openwrt"
+        printers = [host for host in loaded_hosts if host.hostname == "printer"]
+        assert {host.source for host in printers} == {"fritz", "openwrt"}
+        assert {host.ip for host in printers} == {"192.0.2.50", "192.0.2.152"}
+
+        printer_records = [
+            record
+            for record in db.load_dns_records(conn)
+            if record.hostname == "printer"
+        ]
+        assert {record.ip for record in printer_records} == {
+            "192.0.2.50",
+            "192.0.2.152",
+        }
+        assert {record.status for record in printer_records} == {"active"}
         records = {record.hostname: record for record in db.load_dns_records(conn)}
         assert records["owrt-nas"].source == "openwrt"
         assert records["owrt-printer"].status == "stale"

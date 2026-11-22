@@ -328,6 +328,12 @@ OpenWrt-Hosts erscheinen zusätzlich in der Offline-Sektion. Die Injection
 passiert beim Rendern aus der aktuellen Host-Tabelle und ist daher nicht in
 historischen Snapshots enthalten.
 
+Wird dasselbe Gerät (gleiche MAC) von beiden Routern mit unterschiedlichen IPs
+gesehen, bleiben beide als getrennte Host-Zeilen erhalten (Quelle `FritzBox`
+bzw. `OpenWrt`). Im DNS werden dann für denselben Hostnamen mehrere A-Records
+geschrieben. Echte Namenskollisionen verschiedener Geräte (unterschiedliche
+MACs) bleiben weiterhin Konflikte.
+
 Für den Dauerbetrieb empfiehlt sich ein Read-only-User statt `root`. Auf dem
 Router per SSH:
 

@@ -93,6 +93,11 @@ def build_dns_records(
 
     chosen: list[dict] = []
     for (hostname, version), group in by_host_family.items():
+        if len(group) > 1 and all(item["mac"] for item in group):
+            macs = {str(item["mac"]).lower() for item in group}
+            if len(macs) == 1:
+                chosen.extend(group)
+                continue
         winner = _winner(group)
         if len(group) > 1:
             addresses = ", ".join(sorted(item["ip"] for item in group))

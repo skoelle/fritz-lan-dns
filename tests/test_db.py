@@ -188,6 +188,46 @@ def test_dns_source_roundtrip_and_filter(tmp_path: Path) -> None:
         assert rows[0]["source_label"] == "OpenWrt"
 
 
+def test_hosts_keep_both_ips_for_shared_mac(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    db.init_schema(settings.db_path)
+    mac = "aa:bb:cc:99:00:10"
+    fritz_host = HostRecord(
+        key=f"mac:{mac}",
+        hostname="balkonpi",
+        ip="192.0.2.54",
+        mac=mac,
+        active=True,
+        source="fritz",
+        last_seen=iso_now(),
+    )
+    openwrt_host = HostRecord(
+        key=f"openwrt:mac:{mac}",
+        hostname="balkonpi",
+        ip="192.0.2.154",
+        mac=mac,
+        active=True,
+        source="openwrt",
+        last_seen=iso_now(),
+    )
+    with db.connect(settings.db_path) as conn:
+        _store(conn, _mesh(), [fritz_host, openwrt_host])
+        loaded = [host for host in db.load_hosts(conn) if host.mac == mac]
+        assert {host.source for host in loaded} == {"fritz", "openwrt"}
+        assert {host.ip for host in loaded} == {"192.0.2.54", "192.0.2.154"}
+
+        records = build_dns_records(db.load_hosts(conn), [], settings.dns_domain)
+        db.replace_dns_records(conn, records)
+        balkon = [
+            record
+            for record in db.load_dns_records(conn)
+            if record.hostname == "balkonpi"
+        ]
+        assert {record.ip for record in balkon} == {"192.0.2.54", "192.0.2.154"}
+        assert all(record.writable for record in balkon)
+        assert all(record.conflict is None for record in balkon)
+
+
 def test_hosts_source_filter_groups_mesh_as_fritz(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     db.init_schema(settings.db_path)

@@ -81,6 +81,40 @@ def test_openwrt_source_is_kept() -> None:
     assert records[0].status == "active"
 
 
+def test_same_mac_multiple_ips_are_written() -> None:
+    records = build_dns_records(
+        [
+            _host("balkonpi", "192.0.2.54", mac="aa:01", source="fritz"),
+            _host("balkonpi", "192.0.2.154", mac="aa:01", source="openwrt"),
+        ],
+        [],
+        "example.test",
+    )
+    assert {record.ip for record in records} == {"192.0.2.54", "192.0.2.154"}
+    assert {record.status for record in records} == {"active"}
+    assert all(record.conflict is None for record in records)
+
+    hosts_text = hosts_file_content(records)
+    assert "192.0.2.54 balkonpi.example.test" in hosts_text
+    assert "192.0.2.154 balkonpi.example.test" in hosts_text
+
+
+def test_same_hostname_different_macs_keep_single_winner() -> None:
+    records = build_dns_records(
+        [
+            _host("printer", "192.0.2.54", mac="aa:01", source="fritz"),
+            _host("printer", "192.0.2.154", mac="aa:02", source="openwrt"),
+        ],
+        [],
+        "example.test",
+    )
+    assert len(records) == 1
+    assert records[0].writable
+    assert records[0].conflict is not None
+    assert "192.0.2.54" in records[0].conflict
+    assert "192.0.2.154" in records[0].conflict
+
+
 def test_ipv6_is_optional() -> None:
     hosts = [_host("v6host", "fd00::10")]
     assert build_dns_records(hosts, [], "example.test") == []

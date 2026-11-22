@@ -34,6 +34,7 @@ def merge_hosts(
     by_mac: dict[str, HostRecord] = {}
     by_ip: dict[str, HostRecord] = {}
     by_name: dict[str, HostRecord] = {}
+    by_key: dict[str, HostRecord] = {}
 
     def add(record: HostRecord) -> None:
         existing: HostRecord | None = None
@@ -54,12 +55,39 @@ def merge_hosts(
             return
 
         records.append(record)
+        by_key[record.key] = record
         if record.mac:
             by_mac[record.mac.lower()] = record
         if record.ip:
             by_ip[record.ip] = record
         if record.hostname:
             by_name[record.hostname.lower()] = record
+
+    def add_extra(record: HostRecord) -> None:
+        mac = (record.mac or "").lower()
+        existing = by_mac.get(mac) if mac else None
+        if existing is not None and record.ip and existing.ip == record.ip:
+            _merge_into(existing, record)
+            return
+        if existing is None and record.ip:
+            ip_existing = by_ip.get(record.ip)
+            if (
+                ip_existing is not None
+                and ip_existing.hostname
+                and ip_existing.hostname.lower() == record.hostname.lower()
+            ):
+                _merge_into(ip_existing, record)
+                return
+
+        base_key = record.key
+        key = base_key
+        counter = 2
+        while key in by_key:
+            key = f"openwrt:{base_key}" if counter == 2 else f"openwrt:{base_key}:{counter}"
+            counter += 1
+        record.key = key
+        records.append(record)
+        by_key[key] = record
 
     for record in host_entries:
         add(record)
@@ -82,7 +110,7 @@ def merge_hosts(
         )
 
     for record in extra_hosts or []:
-        add(record)
+        add_extra(record)
 
     records.sort(key=lambda record: (record.hostname.lower(), record.key))
     return records

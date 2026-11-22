@@ -76,7 +76,7 @@ def test_merge_extra_openwrt_hosts() -> None:
     assert len({host.key for host in hosts}) == len(hosts)
 
 
-def test_merge_prefers_fritz_source_for_shared_mac() -> None:
+def test_merge_keeps_openwrt_ip_for_shared_mac() -> None:
     extra = [
         HostRecord(
             key="mac:aa:bb:cc:00:00:01",
@@ -88,10 +88,37 @@ def test_merge_prefers_fritz_source_for_shared_mac() -> None:
         )
     ]
     hosts = merge_hosts(parse_host_entries(_entries()), [], extra_hosts=extra)
-    router = next(host for host in hosts if host.hostname == "router")
+    by_name = {host.hostname: host for host in hosts}
 
-    assert router.source == "fritz"
-    assert router.ip == "192.0.2.1"
+    assert by_name["router"].source == "fritz"
+    assert by_name["router"].ip == "192.0.2.1"
+    assert by_name["router-openwrt"].source == "openwrt"
+    assert by_name["router-openwrt"].ip == "192.0.2.200"
+    assert by_name["router-openwrt"].key.startswith("openwrt:")
+    assert len({host.key for host in hosts}) == len(hosts)
+
+
+def test_merge_deduplicates_openwrt_host_with_same_ip() -> None:
+    extra = [
+        HostRecord(
+            key="mac:aa:bb:cc:00:00:01",
+            hostname="router",
+            ip="192.0.2.1",
+            mac="AA:BB:CC:00:00:01",
+            active=True,
+            source="openwrt",
+        )
+    ]
+    hosts = merge_hosts(parse_host_entries(_entries()), [], extra_hosts=extra)
+    routers = [
+        host
+        for host in hosts
+        if host.mac and host.mac.lower() == "aa:bb:cc:00:00:01"
+    ]
+
+    assert len(routers) == 1
+    assert routers[0].source == "fritz"
+    assert len({host.key for host in hosts}) == len(hosts)
 
 
 def test_merge_marks_mesh_node_online_even_if_host_entry_inactive() -> None:
