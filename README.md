@@ -110,13 +110,37 @@ python -m fritz_lan_dns rebuild-dns
 python -m fritz_lan_dns fetch
 ```
 
+## Container-Image
+
+GitHub Actions baut das Image bei jedem Push auf `main` und manuell über
+`workflow_dispatch`:
+
+```bash
+docker pull ghcr.io/skoelle/fritz-lan-dns:latest
+```
+
+Tags:
+
+- `latest`
+- `sha-<kurz>`
+
+Falls das GHCR-Package nach dem ersten Build noch privat ist, in den
+GitHub-Package-Einstellungen auf **public** stellen.
+
+Für lokale Entwicklung:
+
+```bash
+docker build -t fritz-lan-dns:local .
+```
+
 ## Docker
 
 ```bash
 cp docker-compose.example.yml docker-compose.yml
 mkdir -p db data dns
 sudo chown 1000:1000 db data dns
-docker compose up -d --build
+docker compose pull
+docker compose up -d
 ```
 
 Die Einbindung ist bewusst getrennt:

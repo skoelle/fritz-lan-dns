@@ -10,8 +10,9 @@
 # Docker host. The web interface is exposed on 8346.
 services:
   fritz-lan-dns:
-    build: .
-    image: fritz-lan-dns:latest
+    image: ghcr.io/skoelle/fritz-lan-dns:latest
+    # Optional for local development:
+    # build: .
     container_name: fritz-lan-dns
     restart: unless-stopped
     init: true
