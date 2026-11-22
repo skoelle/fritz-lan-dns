@@ -175,39 +175,18 @@ button:disabled { opacity: 0.6; cursor: wait; }
 .topology-summary { margin-bottom: 1rem; }
 .topology-box { padding-top: 0.9rem; }
 
-.tree-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.55rem;
-    padding: 0.45rem 0.25rem;
-    border-bottom: 1px solid #eeeeee;
+.topology-table { min-width: 900px; }
+.topology-table td { vertical-align: middle; }
+.topology-table tbody tr:nth-child(even) { background: #fafafa; }
+.topology-table tbody tr:hover { background: #f0f6ff; }
+.topology-table .device-cell { white-space: nowrap; }
+.device-indent {
+    display: inline-block;
+    padding-left: calc(var(--depth, 0) * 1.2rem);
+    font-weight: 600;
+    color: #222;
 }
-.tree-row:last-child { border-bottom: 0; }
-.tree-row:hover { background: #fafafa; }
-.tree-row.offline { opacity: 0.6; }
-.tree-row.offline .tree-name { color: #777; }
-
-.tree-branch {
-    flex: 0 0 auto;
-    min-width: 2.2rem;
-    color: #b5b5b5;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    font-size: 0.9rem;
-    line-height: 1.6;
-    white-space: pre;
-}
-
-.tree-main {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.35rem 0.6rem;
-    min-width: 0;
-}
-.tree-name { font-weight: 600; color: #222; }
-.tree-model { color: var(--muted); font-size: 0.8rem; }
-.tree-ip { font-size: 0.8rem; }
-.tree-desc { color: var(--muted); font-size: 0.8rem; }
+.muted-cell { color: var(--muted); font-size: 0.85rem; }
 
 .chip {
     display: inline-flex;
@@ -234,6 +213,4 @@ button:disabled { opacity: 0.6; cursor: wait; }
 @media (max-width: 760px) {
     .stat-grid { grid-template-columns: repeat(2, 1fr); }
     .header { align-items: flex-start; }
-    .tree-branch { min-width: 1.6rem; }
-    .tree-model { display: none; }
 }

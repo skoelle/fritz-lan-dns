@@ -70,14 +70,13 @@ def dashboard(conn: sqlite3.Connection, settings: Settings) -> dict:
     }
 
 
-def _tree_row(node: MeshNode, depth: int, prefix: str, branch: str, is_master: bool) -> dict:
+def _table_row(node: MeshNode, depth: int, is_master: bool) -> dict:
     icon, label, css = connection_meta(node.connection_type)
     plc = plc_display(node.plc_rx_kbps, node.plc_tx_kbps)
     return {
         "depth": depth,
+        "indent": max(0, depth - 1),
         "node": node,
-        "prefix": prefix,
-        "branch": branch,
         "is_master": is_master,
         "role_label": display_role(node.mesh_role),
         "connection_icon": icon,
@@ -117,26 +116,14 @@ def topology(conn: sqlite3.Connection) -> dict:
     rows: list[dict] = []
     visited: set[str] = set()
 
-    def walk(uid: str, depth: int, prefix: str, branch: str, is_master: bool, is_last: bool) -> None:
+    def walk(uid: str, depth: int, is_master: bool) -> None:
         node = by_uid.get(uid)
         if node is None or uid in visited:
             return
         visited.add(uid)
-        rows.append(_tree_row(node, depth, prefix, branch, is_master))
-        child_nodes = [child for child in children.get(uid, []) if child.uid not in visited]
-        for index, child in enumerate(child_nodes):
-            child_last = index == len(child_nodes) - 1
-            child_prefix = prefix + ("   " if is_last else "│  ")
-            if depth == 0:
-                child_prefix = ""
-            walk(
-                child.uid,
-                depth + 1,
-                child_prefix,
-                "└─" if child_last else "├─",
-                False,
-                child_last,
-            )
+        rows.append(_table_row(node, depth, is_master))
+        for child in children.get(uid, []):
+            walk(child.uid, depth + 1, False)
 
     master_uid = next(
         (node.uid for node in nodes if node.mesh_role.lower() == "master"),
@@ -144,7 +131,7 @@ def topology(conn: sqlite3.Connection) -> dict:
     )
     root_uid = master_uid or (nodes[0].uid if nodes else None)
     if root_uid:
-        walk(root_uid, 0, "", "", root_uid == master_uid, True)
+        walk(root_uid, 0, root_uid == master_uid)
 
     offline = [node for node in nodes if not node.online or node.uid not in visited]
     offline.sort(key=lambda node: (node.device_name.lower(), node.uid))
@@ -159,7 +146,7 @@ def topology(conn: sqlite3.Connection) -> dict:
         "latest": latest,
         "rows": rows,
         "offline": offline,
-        "offline_rows": [_tree_row(node, 0, "", "🔴", False) for node in offline],
+        "offline_rows": [_table_row(node, 0, False) for node in offline],
         "online": online,
         "links": links,
         "master": by_uid.get(master_uid) if master_uid else None,
