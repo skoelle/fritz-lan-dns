@@ -90,6 +90,7 @@ def _openwrt_settings(tmp_path: Path):
 
 def test_run_fetch_includes_openwrt_hosts(tmp_path: Path, monkeypatch) -> None:
     settings = _openwrt_settings(tmp_path)
+    settings.device_names_file.write_text("owrt-nas OpenWrt NAS\n", encoding="utf-8")
     monkeypatch.setattr("fritz_lan_dns.fetch.FritzClient", FakeClient)
     monkeypatch.setattr("fritz_lan_dns.fetch.OpenWrtClient", FakeOpenWrt)
 
@@ -105,6 +106,7 @@ def test_run_fetch_includes_openwrt_hosts(tmp_path: Path, monkeypatch) -> None:
         loaded_hosts = db.load_hosts(conn)
         hosts = {host.hostname: host for host in loaded_hosts}
         assert hosts["owrt-nas"].source == "openwrt"
+        assert hosts["owrt-nas"].description == "OpenWrt NAS"
         printers = [host for host in loaded_hosts if host.hostname == "printer"]
         assert {host.source for host in printers} == {"fritz", "openwrt"}
         assert {host.ip for host in printers} == {"192.0.2.50", "192.0.2.152"}

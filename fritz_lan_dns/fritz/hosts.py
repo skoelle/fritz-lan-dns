@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..models import HostRecord
-from ..util import parse_bool
+from ..util import device_description, parse_bool
 
 
 def _host_key(entry: dict[str, Any], index: int) -> str:
@@ -28,9 +28,7 @@ def parse_host_entries(
         hostname = str(entry.get("NewHostName") or "").strip()
         mac = str(entry.get("NewMACAddress") or "").strip().lower() or None
         ip = str(entry.get("NewIPAddress") or "").strip() or None
-        description = descriptions.get(hostname.lower(), "")
-        if not description and "." in hostname:
-            description = descriptions.get(hostname.split(".", 1)[0].lower(), "")
+        description = device_description(hostname, descriptions)
         hosts.append(
             HostRecord(
                 key=_host_key(entry, index),

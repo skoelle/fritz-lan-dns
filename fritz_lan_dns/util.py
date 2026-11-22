@@ -60,6 +60,18 @@ def source_filter_values(source: str | None) -> tuple[str, ...]:
     return SOURCE_FILTER_GROUPS.get(value, (value,) if value else ())
 
 
+def device_description(
+    hostname: str | None, descriptions: dict[str, str]
+) -> str:
+    value = (hostname or "").strip().lower()
+    if not value:
+        return ""
+    description = descriptions.get(value)
+    if description:
+        return description
+    return descriptions.get(value.split(".", 1)[0], "")
+
+
 def load_device_names(path: Path) -> dict[str, str]:
     descriptions: dict[str, str] = {}
     if not path.exists():

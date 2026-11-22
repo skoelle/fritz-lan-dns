@@ -7,6 +7,7 @@ from fritz_lan_dns.fritz.hosts import parse_host_entries
 from fritz_lan_dns.fritz.mesh import parse_mesh
 from fritz_lan_dns.merge import merge_hosts
 from fritz_lan_dns.models import HostRecord
+from fritz_lan_dns.util import device_description
 
 FIXTURE = Path(__file__).parent / "fixtures" / "mesh.json"
 
@@ -67,13 +68,50 @@ def test_merge_extra_openwrt_hosts() -> None:
             source="openwrt",
         )
     ]
-    hosts = merge_hosts(parse_host_entries(_entries()), [], extra_hosts=extra)
+    hosts = merge_hosts(
+        parse_host_entries(_entries()),
+        [],
+        {"owrt-nas": "OpenWrt NAS"},
+        extra_hosts=extra,
+    )
     by_name = {host.hostname: host for host in hosts}
 
     assert by_name["owrt-nas"].source == "openwrt"
     assert by_name["owrt-nas"].ip == "192.0.2.150"
+    assert by_name["owrt-nas"].description == "OpenWrt NAS"
     assert by_name["router"].source == "fritz"
     assert len({host.key for host in hosts}) == len(hosts)
+
+
+def test_merge_extra_openwrt_uses_base_name_description() -> None:
+    extra = [
+        HostRecord(
+            key="mac:aa:bb:cc:00:00:12",
+            hostname="nas.lan",
+            ip="192.0.2.152",
+            mac="AA:BB:CC:00:00:12",
+            active=True,
+            source="openwrt",
+        )
+    ]
+    hosts = merge_hosts(
+        parse_host_entries(_entries()),
+        [],
+        {"nas": "NAS"},
+        extra_hosts=extra,
+    )
+    nas = next(host for host in hosts if host.hostname == "nas.lan")
+    assert nas.description == "NAS"
+
+
+def test_device_description_lookup() -> None:
+    names = {"nas": "NAS", "printer.lan": "Printer LAN"}
+
+    assert device_description("nas", names) == "NAS"
+    assert device_description("nas.lan", names) == "NAS"
+    assert device_description("Printer.LAN", names) == "Printer LAN"
+    assert device_description("unknown", names) == ""
+    assert device_description("", names) == ""
 
 
 def test_merge_keeps_openwrt_ip_for_shared_mac() -> None:

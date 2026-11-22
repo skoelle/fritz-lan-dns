@@ -303,6 +303,7 @@ def test_topology_attaches_openwrt_hosts(tmp_path: Path) -> None:
         mac="aa:bb:cc:99:00:01",
         active=True,
         source="openwrt",
+        description="OpenWrt NAS",
     )
     inactive = HostRecord(
         key="mac:ow-offline",
@@ -322,6 +323,7 @@ def test_topology_attaches_openwrt_hosts(tmp_path: Path) -> None:
     assert child_row["node"].parent_uid == "parent"
     assert child_row["depth"] == parent_row["depth"] + 1
     assert child_row["source"] == "openwrt"
+    assert child_row["node"].description == "OpenWrt NAS"
     assert "ow-offline" not in rows
 
     offline_names = [row["node"].device_name for row in result["offline_rows"]]

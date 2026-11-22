@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .models import HostRecord, MeshNode
+from .util import device_description
 
 _SOURCE_RANK = {"fritz": 3, "openwrt": 2, "mesh": 1}
 
@@ -64,6 +65,8 @@ def merge_hosts(
             by_name[record.hostname.lower()] = record
 
     def add_extra(record: HostRecord) -> None:
+        if not record.description:
+            record.description = device_description(record.hostname, descriptions)
         mac = (record.mac or "").lower()
         existing = by_mac.get(mac) if mac else None
         if existing is not None and record.ip and existing.ip == record.ip:
@@ -105,7 +108,8 @@ def merge_hosts(
                 interface_type=node.connection_type or "",
                 last_seen=None,
                 source="mesh",
-                description=node.description or descriptions.get(hostname.lower(), ""),
+                description=node.description
+                or device_description(hostname, descriptions),
             )
         )
 

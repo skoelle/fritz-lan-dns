@@ -117,6 +117,8 @@ cp config/device-names.conf.example config/device-names.conf
 ```
 
 Die echte `config/device-names.conf` bleibt lokal und wird nicht veröffentlicht.
+Die Beschreibungen gelten auch für OpenWrt-Hosts: Lookup über den Hostnamen,
+sonst über den Basisnamen vor dem ersten Punkt (`nas.lan` → `nas`).
 
 ## Lokal starten
 
