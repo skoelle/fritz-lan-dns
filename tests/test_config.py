@@ -52,6 +52,10 @@ def test_build_settings_has_no_private_defaults(tmp_path, monkeypatch) -> None:
         "OPENWRT_PASSWORD",
         "OPENWRT_TOPOLOGY_PARENT_IP",
         "OPENWRT_MWAN3_ENABLED",
+        "FRITZ_REPEATER_IPS",
+        "FRITZ_REPEATER_USER",
+        "FRITZ_REPEATER_PW",
+        "FRITZ_REPEATER_TIMEOUT",
     ):
         monkeypatch.delenv(key, raising=False)
     settings = build_settings(env_file=tmp_path / "missing.env")
@@ -66,3 +70,18 @@ def test_build_settings_has_no_private_defaults(tmp_path, monkeypatch) -> None:
     assert settings.openwrt_user == ""
     assert settings.openwrt_topology_parent_ip == ""
     assert settings.openwrt_mwan3_enabled is True
+    assert settings.fritz_repeater_ips == ""
+    assert settings.fritz_repeater_ip_list == ()
+    assert settings.fritz_repeater_timeout == 25
+
+
+def test_repeater_ip_list_splits_and_deduplicates(tmp_path) -> None:
+    settings = make_settings(
+        tmp_path,
+        fritz_repeater_ips="192.0.2.10, 192.0.2.11;192.0.2.10\n192.0.2.12",
+    )
+    assert settings.fritz_repeater_ip_list == (
+        "192.0.2.10",
+        "192.0.2.11",
+        "192.0.2.12",
+    )

@@ -41,6 +41,7 @@ def http_url(ip: str | None) -> str | None:
 SOURCE_LABELS = {
     "fritz": "FritzBox",
     "mesh": "FritzBox",
+    "fritz-repeater": "FRITZ-Repeater",
     "openwrt": "OpenWrt",
     "static": "Statisch",
 }

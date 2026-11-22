@@ -130,6 +130,7 @@ pre {
 .badge.running, .badge.stale { background: #fff4d6; color: var(--yellow); }
 .badge.failed, .badge.conflict { background: #fde8e6; color: var(--red); }
 .badge.source-fritz, .badge.source-mesh { background: #e7f0fb; color: #1a4f8a; }
+.badge.source-fritz-repeater { background: #eef5ff; color: #1d4f91; }
 .badge.source-openwrt { background: #fdeee0; color: #a04d00; }
 .badge.source-static { background: #e6f4ea; color: var(--green); }
 
@@ -216,6 +217,36 @@ button:disabled { opacity: 0.6; cursor: wait; }
 .plc.ok { color: var(--green); }
 .plc.slow { color: var(--yellow); }
 .plc.offline { color: var(--red); }
+
+.chip.band-24 { background: #e8f1ff; color: #1d4f91; }
+.chip.band-5 { background: #f3e8ff; color: #6b3fa0; }
+.chip.band-6 { background: #e6f4ea; color: var(--green); }
+.chip.band-unknown { background: #eeeeee; color: #555555; }
+
+.utilization, .signal { font-size: 0.8rem; font-weight: 600; white-space: nowrap; }
+.utilization.low, .signal.good { color: var(--green); }
+.utilization.medium, .signal.medium { color: var(--yellow); }
+.utilization.high, .signal.bad { color: var(--red); }
+.utilization.unknown, .signal.unknown { color: var(--muted); }
+
+.wlan-device-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.85rem;
+}
+.wlan-device-name { font-size: 1.05rem; font-weight: 700; color: #222; }
+.wlan-device-counts { color: var(--muted); font-size: 0.85rem; font-weight: 600; }
+.wlan-subtitle {
+    margin: 1rem 0 0.4rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #888;
+}
 
 @media (max-width: 760px) {
     .stat-grid { grid-template-columns: repeat(2, 1fr); }

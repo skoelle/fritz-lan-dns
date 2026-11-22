@@ -22,16 +22,56 @@
         },
         {
           "type": "WLAN",
-          "name": "5GHz",
+          "uid": "iface-master-5g",
+          "name": "AP:5G:0",
+          "ssid": "example",
+          "opmode": "AP",
+          "security": "WPA2_WPA3_MIXED",
+          "current_channel": 36,
+          "current_channel_info": {
+            "primary_freq": 5180000,
+            "channel_width": "80 MHz"
+          },
+          "channel_utilization": 12,
+          "phymodes": ["a", "n", "ac"],
+          "supported_streams_tx": [["20 MHz", 2], ["80 MHz", 2]],
+          "supported_streams_rx": [["20 MHz", 2], ["80 MHz", 2]],
+          "steering_enabled": true,
           "node_links": [
             {
+              "uid": "link-master-client",
               "node_1_uid": "uuid-master",
               "node_2_uid": "uuid-wlan",
+              "node_interface_1_uid": "iface-master-5g",
+              "node_interface_2_uid": "iface-client-5g",
               "state": "CONNECTED",
               "max_data_rate_rx": 866000,
-              "max_data_rate_tx": 866000
+              "max_data_rate_tx": 866000,
+              "cur_data_rate_rx": 866000,
+              "cur_data_rate_tx": 866000,
+              "rx_rcpi": -60,
+              "tx_rcpi": -58
             }
           ]
+        },
+        {
+          "type": "WLAN",
+          "uid": "iface-master-guest",
+          "name": "AP_GUEST:2G:0",
+          "ssid": "example-guest",
+          "opmode": "AP_GUEST",
+          "security": "WPA2PSK",
+          "current_channel": 6,
+          "current_channel_info": {
+            "primary_freq": 2437000,
+            "channel_width": "20 MHz"
+          },
+          "channel_utilization": 5,
+          "phymodes": ["g", "n"],
+          "supported_streams_tx": [["20 MHz", 4]],
+          "supported_streams_rx": [["20 MHz", 4]],
+          "steering_enabled": true,
+          "node_links": []
         }
       ]
     },
@@ -52,6 +92,41 @@
               "state": "CONNECTED"
             }
           ]
+        },
+        {
+          "type": "WLAN",
+          "uid": "iface-repeater-5g",
+          "name": "AP:5G:0",
+          "ssid": "example",
+          "opmode": "AP",
+          "security": "WPA2_WPA3_MIXED",
+          "current_channel": 36,
+          "current_channel_info": {
+            "primary_freq": 5180000,
+            "channel_width": "80 MHz"
+          },
+          "channel_utilization": 9,
+          "phymodes": ["a", "n", "ac"],
+          "supported_streams_tx": [["20 MHz", 4], ["80 MHz", 4]],
+          "supported_streams_rx": [["20 MHz", 4], ["80 MHz", 4]],
+          "steering_enabled": true,
+          "node_links": []
+        },
+        {
+          "type": "WLAN",
+          "uid": "iface-repeater-uplink",
+          "name": "UPLINK:5G:0",
+          "ssid": "",
+          "opmode": "REPEATER",
+          "security": "WPA3PSK",
+          "current_channel": 36,
+          "current_channel_info": {
+            "primary_freq": 5180000,
+            "channel_width": "80 MHz"
+          },
+          "channel_utilization": 9,
+          "phymodes": ["a", "n", "ac"],
+          "node_links": []
         },
         {
           "type": "PLC",
@@ -77,12 +152,19 @@
       "node_interfaces": [
         {
           "type": "WLAN",
-          "name": "5GHz",
+          "uid": "iface-client-5g",
+          "name": "AP:5G:0",
+          "opmode": "STATION",
           "node_links": [
             {
+              "uid": "link-master-client",
               "node_1_uid": "uuid-wlan",
               "node_2_uid": "uuid-master",
-              "state": "CONNECTED"
+              "node_interface_1_uid": "iface-client-5g",
+              "node_interface_2_uid": "iface-master-5g",
+              "state": "CONNECTED",
+              "rx_rcpi": -58,
+              "tx_rcpi": -60
             }
           ]
         }

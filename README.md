@@ -24,9 +24,11 @@ Owner-Namen `foo.<dns-domain>.` zurückgeschrieben.
 
 - Stündlicher Abruf per eingebautem Scheduler
 - Mesh-Topologie inkl. LAN/WLAN/PLC-Verbindungen und PLC-Raten
+- WLAN-Übersicht mit Radios, Kanälen, Kanalbreite, Auslastung, SSID,
+  Sicherheit und verbundenen Clients inkl. Signal
 - Alle bekannten FRITZ!Box-Hosts (aktiv und offline)
 - Optional: zweite Host-Quelle OpenWrt (DHCP-Leases + statische Hosts) via ubus
-- Webinterface für Dashboard, Topologie, Hosts, DNS und Historie
+- Webinterface für Dashboard, Topologie, WLAN, Hosts, DNS und Historie
 - DNS-Records aus Hostnamen und IPs, inkl. Konflikt-Erkennung und Quellenangabe
 - `dns/hosts` für CoreDNS, `dns/<dns-domain>.zone` als Export
 - MISS-Fallback: unbekannte `foo.<dns-domain>` werden als `foo.fritz.box.` an
@@ -60,6 +62,12 @@ Beispielwerte (die echten Werte stehen nur in der lokalen `.env`):
 BoxIP='192.0.2.1'
 BoxUSER='fritz-user'
 BoxPW='fritz-password'
+
+# Optional: FRITZ-Repeater außerhalb des Mesh direkt per TR-064 abfragen
+FRITZ_REPEATER_IPS=
+FRITZ_REPEATER_USER=
+FRITZ_REPEATER_PW=
+FRITZ_REPEATER_TIMEOUT=25
 
 FETCH_INTERVAL_MINUTES=60
 WEB_HOST=0.0.0.0
@@ -381,14 +389,45 @@ echo '/usr/share/rpcd/acl.d/ubusro.json' >> /etc/sysupgrade.conf
 Der Docker-Container muss den OpenWrt-Router im anderen Subnetz erreichen
 können (Routing/Firewall auf dem Docker-Host).
 
+## WLAN
+
+WLAN-Radios, SSID, Band, Kanal, Kanalbreite, Auslastung, Sicherheit und
+Streams werden aus der FRITZ!Box-Mesh-Liste gelesen. Das gilt für die
+FRITZ!Box selbst und für alle Repeater, die im Mesh sichtbar sind. WLAN-Clients
+werden aus den Mesh-Links inklusive Signalstärke (`rx_rcpi`/`tx_rcpi`) und
+Datenrate übernommen. Repeater-Uplinks zählen nicht als Clients.
+
+Ein Repeater, der nicht im FRITZ!Box-Mesh hängt (z. B. hinter OpenWrt), kann
+direkt per TR-064 abgefragt werden:
+
+```env
+FRITZ_REPEATER_IPS=192.0.2.10
+FRITZ_REPEATER_USER=
+FRITZ_REPEATER_PW=
+```
+
+`FRITZ_REPEATER_IPS` ist eine Komma- oder Leerzeichenliste. Ohne eigene
+`FRITZ_REPEATER_USER`/`FRITZ_REPEATER_PW` werden `BoxUSER` und `BoxPW`
+verwendet. Der Repeater muss vom Container aus erreichbar sein; bei einem
+eigenen Subnetz hinter OpenWrt ist dafür eine Route auf dem Docker-Host
+nötig. Der Zugriff braucht auf dem Repeater einen TR-064-Benutzer mit
+Leserechten (App bzw. „FRITZ!Box Einstellungen“). Schlägt der Abruf fehl,
+bleibt der Snapshot erfolgreich und zeigt eine Warnung.
+
+Die direkte TR-064-Abfrage liefert bei manchen Repeatern keine Kanalbreite.
+SSID, Kanal, Band, Sicherheit, Clients und Signal werden trotzdem angezeigt.
+Die WLAN-Daten landen pro Snapshot in `wlan_json`; die neueste nicht-leere
+Aufzeichnung wird im Dashboard und unter `/wlan` dargestellt.
+
 ## Webinterface
 
-- `/` Dashboard: letzter Lauf, Zähler, Konflikte, Historie, Refresh
+- `/` Dashboard: letzter Lauf, Zähler, WLAN, MultiWAN, Konflikte, Historie, Refresh
 - `/topology`: Mesh-Baum und Offline-Geräte
+- `/wlan`: WLAN-Radios pro Gerät und WLAN-Clients inkl. Signal
 - `/hosts`: alle bekannten Hosts, Suche, Status- und Quellen-Filter
 - `/dns`: Records mit Quelle, Konflikte, Serial, Corefile, Downloads
 - `/history`: Snapshots und Fehler
-- `/api/status`, `/api/topology`, `/api/hosts`, `/api/dns`,
+- `/api/status`, `/api/topology`, `/api/wlan`, `/api/hosts`, `/api/dns`,
   `/api/snapshots`, `/api/snapshots/{id}`
 - `POST /api/refresh`: manueller Abruf
 - `/health`: Healthcheck für Docker

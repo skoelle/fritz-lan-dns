@@ -3,15 +3,23 @@ from __future__ import annotations
 import json
 import logging
 import time
+from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 
 from . import db
 from .config import Settings
 from .dns import build_dns_records, ensure_dns_files, write_dns_files
-from .fritz import FritzClient, load_mesh_json, parse_host_entries, parse_mesh
+from .fritz import (
+    FritzClient,
+    load_mesh_json,
+    parse_host_entries,
+    parse_mesh,
+    parse_wlan,
+)
+from .fritz.repeater import fetch_repeater_wlan
 from .merge import merge_hosts
-from .models import HostRecord
+from .models import HostRecord, MeshSnapshot, WlanSnapshot
 from .openwrt import OpenWrtClient, OpenWrtNotFound, parse_openwrt_hosts
 from .portscan import scan_ports
 from .util import iso_now, load_device_names
@@ -91,6 +99,60 @@ def _fetch_openwrt_mwan3(
     return data, None
 
 
+def _parse_mesh_wlan(
+    mesh_raw: dict, mesh: MeshSnapshot
+) -> tuple[WlanSnapshot, str | None]:
+    try:
+        nodes = {node.uid: node for node in mesh.nodes}
+        return parse_wlan(mesh_raw, nodes), None
+    except Exception as exc:  # noqa: BLE001 - WLAN darf den Fetch nicht stoppen
+        LOGGER.warning("WLAN-Parsing fehlgeschlagen: %s", exc)
+        return WlanSnapshot(interfaces=[], clients=[]), (
+            f"WLAN-Parsing fehlgeschlagen: {exc}"
+        )
+
+
+def _fetch_repeater_wlans(
+    settings: Settings, hosts: list[HostRecord]
+) -> tuple[WlanSnapshot, list[str]]:
+    targets = [
+        ip for ip in settings.fritz_repeater_ip_list if ip != settings.box_ip
+    ]
+    if not targets:
+        return WlanSnapshot(interfaces=[], clients=[]), []
+
+    host_by_ip = {host.ip: host for host in hosts if host.ip}
+    host_by_mac = {host.mac.lower(): host for host in hosts if host.mac}
+    interfaces = []
+    clients = []
+    warnings: list[str] = []
+    for ip in targets:
+        host = host_by_ip.get(ip)
+        try:
+            client = FritzClient(
+                ip,
+                settings.fritz_repeater_user,
+                settings.fritz_repeater_pw,
+                timeout=settings.fritz_repeater_timeout,
+                verify_tls=settings.fritz_verify_tls,
+            )
+            wlan = fetch_repeater_wlan(
+                client,
+                ip=ip,
+                device_name=host.hostname if host else None,
+                description=host.description if host else "",
+                host_by_mac=host_by_mac,
+                host_by_ip=host_by_ip,
+            )
+        except Exception as exc:  # noqa: BLE001 - optionaler Abruf
+            LOGGER.warning("FRITZ-Repeater %s: WLAN-Abruf fehlgeschlagen: %s", ip, exc)
+            warnings.append(f"FRITZ-Repeater {ip}: WLAN-Abruf fehlgeschlagen: {exc}")
+            continue
+        interfaces.extend(wlan.interfaces)
+        clients.extend(wlan.clients)
+    return WlanSnapshot(interfaces=interfaces, clients=clients), warnings
+
+
 def prune_raw_files(settings: Settings) -> int:
     if settings.raw_retention_days <= 0 or not settings.raw_dir.exists():
         return 0
@@ -131,12 +193,18 @@ def run_fetch(settings: Settings, legacy_json: Path | None = None) -> dict:
             mesh_text = client.fetch_mesh_text(mesh_path, security_port)
             mesh_raw = load_mesh_json(mesh_text)
             mesh = parse_mesh(mesh_raw, descriptions)
+            mesh_wlan, wlan_parse_error = _parse_mesh_wlan(mesh_raw, mesh)
 
             host_fetch = client.get_hosts()
             host_entries = parse_host_entries(host_fetch.entries, descriptions)
             warning = None
+            if wlan_parse_error:
+                warning = wlan_parse_error
             if host_fetch.errors:
-                warning = f"{len(host_fetch.errors)} Host-Einträge konnten nicht gelesen werden"
+                host_error = (
+                    f"{len(host_fetch.errors)} Host-Einträge konnten nicht gelesen werden"
+                )
+                warning = (warning + "; " if warning else "") + host_error
             if not host_entries:
                 warning = (
                     (warning + "; " if warning else "")
@@ -159,6 +227,28 @@ def run_fetch(settings: Settings, legacy_json: Path | None = None) -> dict:
                 warning = (warning + "; " if warning else "") + openwrt_error
             hosts = merge_hosts(
                 host_entries, mesh.nodes, descriptions, extra_hosts=extra_hosts
+            )
+            extra_wlan, wlan_warnings = _fetch_repeater_wlans(settings, hosts)
+            for wlan_warning in wlan_warnings:
+                warning = (warning + "; " if warning else "") + wlan_warning
+            mesh_wlan_ips = {
+                item.device_ip for item in mesh_wlan.interfaces if item.device_ip
+            }
+            extra_interfaces = []
+            skipped_uids: set[str] = set()
+            for item in extra_wlan.interfaces:
+                if item.device_ip and item.device_ip in mesh_wlan_ips:
+                    skipped_uids.add(item.node_uid)
+                    continue
+                extra_interfaces.append(item)
+            extra_clients = [
+                client
+                for client in extra_wlan.clients
+                if client.ap_node_uid not in skipped_uids
+            ]
+            wlan = WlanSnapshot(
+                interfaces=[*mesh_wlan.interfaces, *extra_interfaces],
+                clients=[*mesh_wlan.clients, *extra_clients],
             )
 
             http_results: dict[str, bool] = {}
@@ -202,6 +292,17 @@ def run_fetch(settings: Settings, legacy_json: Path | None = None) -> dict:
                 db.store_snapshot_mwan3(
                     conn, snapshot_id, json.dumps(mwan3, ensure_ascii=False)
                 )
+            db.store_snapshot_wlan(
+                conn,
+                snapshot_id,
+                json.dumps(
+                    {
+                        "interfaces": [asdict(item) for item in wlan.interfaces],
+                        "clients": [asdict(item) for item in wlan.clients],
+                    },
+                    ensure_ascii=False,
+                ),
+            )
 
             all_hosts = db.load_hosts(conn)
             static = db.load_dns_static(conn)
@@ -230,13 +331,16 @@ def run_fetch(settings: Settings, legacy_json: Path | None = None) -> dict:
             mwan3_interfaces = len(mwan3.get("interfaces") or {}) if mwan3 else 0
             LOGGER.info(
                 "Snapshot %s: %s Nodes (%s online), %s Hosts (%s OpenWrt), "
-                "%s MWAN3-Interfaces, %s DNS-Records, %s HTTP-Ports",
+                "%s MWAN3-Interfaces, %s WLAN-Radios, %s WLAN-Clients, "
+                "%s DNS-Records, %s HTTP-Ports",
                 snapshot_id,
                 len(mesh.nodes),
                 sum(1 for node in mesh.nodes if node.online),
                 len(hosts),
                 len(extra_hosts),
                 mwan3_interfaces,
+                len(wlan.interfaces),
+                len(wlan.clients),
                 dns_summary["records"],
                 http_open_count,
             )
@@ -247,6 +351,8 @@ def run_fetch(settings: Settings, legacy_json: Path | None = None) -> dict:
                 "hosts": len(hosts),
                 "openwrt_hosts": len(extra_hosts),
                 "mwan3_interfaces": mwan3_interfaces,
+                "wlan_interfaces": len(wlan.interfaces),
+                "wlan_clients": len(wlan.clients),
                 "dns_records": dns_summary["records"],
                 "dns_conflicts": dns_summary["conflicts"],
                 "http_open": http_open_count,

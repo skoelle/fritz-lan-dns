@@ -4,7 +4,7 @@ from pathlib import Path
 
 from fritz_lan_dns import db
 from fritz_lan_dns.fetch import run_fetch
-from fritz_lan_dns.fritz.client import HostFetch
+from fritz_lan_dns.fritz.client import FritzBoxError, HostFetch
 from fritz_lan_dns.openwrt import OpenWrtNotFound
 from tests.helpers import make_settings
 
@@ -45,6 +45,32 @@ class FakeClient:
             raw_xml="{}",
             errors=[],
         )
+
+    def get_device_info(self) -> dict[str, str]:
+        return {"NewModelName": "FRITZ!Repeater 2400"}
+
+    def get_wlan_info(self, index: int) -> dict[str, str]:
+        if index != 1:
+            raise FritzBoxError("kein Dienst")
+        return {
+            "NewSSID": "example",
+            "NewChannel": "36",
+            "NewX_AVM-DE_FrequencyBand": "5000",
+            "NewStandard": "ax",
+            "NewBeaconType": "11iandWPA3",
+        }
+
+    def get_wlan_associations(self, index: int) -> list[dict[str, str]]:
+        if index != 1:
+            return []
+        return [
+            {
+                "NewAssociatedDeviceMACAddress": "AA:BB:CC:00:00:02",
+                "NewAssociatedDeviceIPAddress": "192.0.2.50",
+                "NewX_AVM-DE_Speed": "866",
+                "NewX_AVM-DE_SignalStrength": "70",
+            }
+        ]
 
 
 class FakeOpenWrt:
@@ -203,6 +229,52 @@ def test_run_fetch_openwrt_failure_is_warning(tmp_path: Path, monkeypatch) -> No
         latest = db.latest_snapshot(conn)
         assert latest is not None
         assert latest["status"] == "ok"
+
+
+def test_run_fetch_includes_extra_repeater_wlan(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(
+        tmp_path,
+        fritz_repeater_ips="192.0.2.60",
+        fritz_repeater_user="repeater-user",
+        fritz_repeater_pw="repeater-password",
+    )
+    monkeypatch.setattr("fritz_lan_dns.fetch.FritzClient", FakeClient)
+
+    result = run_fetch(settings)
+
+    assert result["wlan_interfaces"] == 5
+    assert result["wlan_clients"] == 2
+    with db.connect(settings.db_path) as conn:
+        entry = db.latest_wlan(conn)
+        assert entry is not None
+        interfaces = entry["data"]["interfaces"]
+        assert any(item["source"] == "fritz-repeater" for item in interfaces)
+        assert len(entry["data"]["clients"]) == 2
+
+
+def test_run_fetch_repeater_wlan_failure_is_warning(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path, fritz_repeater_ips="192.0.2.60")
+
+    class FailingRepeaterClient(FakeClient):
+        def get_wlan_info(self, index: int) -> dict[str, str]:
+            raise RuntimeError("repeater nicht erreichbar")
+
+    monkeypatch.setattr("fritz_lan_dns.fetch.FritzClient", FailingRepeaterClient)
+
+    result = run_fetch(settings)
+
+    assert "FRITZ-Repeater 192.0.2.60" in (result["warning"] or "")
+    assert result["wlan_interfaces"] == 4
+    with db.connect(settings.db_path) as conn:
+        latest = db.latest_snapshot(conn)
+        assert latest is not None
+        assert latest["status"] == "ok"
+        entry = db.latest_wlan(conn)
+        assert entry is not None
+        assert all(
+            item["source"] != "fritz-repeater"
+            for item in entry["data"]["interfaces"]
+        )
 
 
 def test_run_fetch_end_to_end(tmp_path: Path, monkeypatch) -> None:

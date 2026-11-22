@@ -26,7 +26,8 @@ CREATE TABLE IF NOT EXISTS snapshots (
     host_count INTEGER NOT NULL DEFAULT 0,
     dns_count INTEGER NOT NULL DEFAULT 0,
     zone_serial INTEGER,
-    mwan3_json TEXT
+    mwan3_json TEXT,
+    wlan_json TEXT
 );
 
 CREATE TABLE IF NOT EXISTS mesh_nodes (
@@ -147,6 +148,7 @@ def _ensure_column(
 def _migrate_schema(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "dns_records", "source", "source TEXT")
     _ensure_column(conn, "snapshots", "mwan3_json", "mwan3_json TEXT")
+    _ensure_column(conn, "snapshots", "wlan_json", "wlan_json TEXT")
 
 
 def init_schema(path: Path) -> None:
@@ -497,6 +499,35 @@ def latest_mwan3(conn: sqlite3.Connection) -> dict | None:
         return None
     try:
         data = json.loads(row["mwan3_json"])
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    return {"started_at": row["started_at"], "data": data}
+
+
+def store_snapshot_wlan(
+    conn: sqlite3.Connection, snapshot_id: int, content: str
+) -> None:
+    conn.execute(
+        "UPDATE snapshots SET wlan_json = ? WHERE id = ?", (content, snapshot_id)
+    )
+    conn.commit()
+
+
+def latest_wlan(conn: sqlite3.Connection) -> dict | None:
+    row = conn.execute(
+        """
+        SELECT started_at, wlan_json
+        FROM snapshots
+        WHERE wlan_json IS NOT NULL
+        ORDER BY id DESC LIMIT 1
+        """
+    ).fetchone()
+    if row is None or not row["wlan_json"]:
+        return None
+    try:
+        data = json.loads(row["wlan_json"])
     except (TypeError, ValueError):
         return None
     if not isinstance(data, dict):

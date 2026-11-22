@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import sqlite3
+from dataclasses import asdict
 from pathlib import Path
 
 from fritz_lan_dns import db
 from fritz_lan_dns.dns import build_dns_records, ensure_dns_files, write_dns_files
 from fritz_lan_dns.fritz.mesh import parse_mesh
+from fritz_lan_dns.fritz.wlan import parse_wlan
 from fritz_lan_dns.models import HostRecord, MeshNode, MeshSnapshot
 from fritz_lan_dns.util import iso_now
 from fritz_lan_dns.web import data as web_data
@@ -473,6 +475,76 @@ def test_init_schema_migrates_mwan3_json(tmp_path: Path) -> None:
             row["name"] for row in conn.execute("PRAGMA table_info(snapshots)")
         }
     assert "mwan3_json" in columns
+
+
+def test_latest_wlan_roundtrip_and_view(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    db.init_schema(settings.db_path)
+    raw = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    mesh = parse_mesh(raw)
+    wlan = parse_wlan(raw, {node.uid: node for node in mesh.nodes})
+    payload = {
+        "interfaces": [asdict(item) for item in wlan.interfaces],
+        "clients": [asdict(item) for item in wlan.clients],
+    }
+    with db.connect(settings.db_path) as conn:
+        snapshot_id = db.start_snapshot(conn, "2026-11-22T20:00:00+00:00")
+        db.store_snapshot_wlan(conn, snapshot_id, json.dumps(payload))
+
+        entry = db.latest_wlan(conn)
+        assert entry is not None
+        assert entry["started_at"] == "2026-11-22T20:00:00+00:00"
+        assert entry["data"] == payload
+
+        view = web_data.wlan_view(entry, {"192.0.2.20"})
+        assert view is not None
+        assert view["summary"] == {
+            "devices": 2,
+            "online_devices": 2,
+            "ap_radios": 3,
+            "uplinks": 1,
+            "clients": 1,
+            "guest_radios": 1,
+            "bands": {"2.4 GHz": 1, "5 GHz": 2, "6 GHz": 0},
+        }
+        devices = {device["name"]: device for device in view["devices"]}
+        assert devices["router"]["ap_count"] == 2
+        assert devices["router"]["guest_count"] == 1
+        master_5g = next(
+            item
+            for item in devices["router"]["interfaces"]
+            if item["interface_name"] == "AP:5G:0"
+        )
+        assert master_5g["client_count"] == 1
+        assert view["clients"][0]["signal_label"] == "-58 dBm"
+        assert view["clients"][0]["signal_class"] == "good"
+        assert view["clients"][0]["http_open"] is True
+        assert view["clients"][0]["http_url"] == "http://192.0.2.20/"
+
+
+def test_init_schema_migrates_wlan_json(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    settings.db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(settings.db_path)
+    conn.execute(
+        """
+        CREATE TABLE snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            started_at TEXT NOT NULL,
+            status TEXT NOT NULL
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    db.init_schema(settings.db_path)
+
+    with db.connect(settings.db_path) as conn:
+        columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(snapshots)")
+        }
+    assert "wlan_json" in columns
 
 
 def test_topology_groups_direct_devices_then_slaves_by_ip(tmp_path: Path) -> None:

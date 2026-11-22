@@ -11,6 +11,8 @@ import requests
 import urllib3
 from requests.auth import HTTPBasicAuth, HTTPDigestAuth
 
+from ..util import parse_int
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
@@ -186,6 +188,35 @@ class FritzClient:
         if response.status_code >= 400:
             raise FritzBoxError(f"Mesh-Liste konnte nicht geladen werden: HTTP {response.status_code}")
         return response.text
+
+    def get_device_info(self) -> dict[str, str]:
+        return self.soap(
+            "deviceinfo",
+            "urn:dslforum-org:service:DeviceInfo:1",
+            "GetInfo",
+        )
+
+    def get_wlan_info(self, index: int) -> dict[str, str]:
+        service = f"urn:dslforum-org:service:WLANConfiguration:{index}"
+        return self.soap(f"wlanconfig{index}", service, "GetInfo")
+
+    def get_wlan_associations(self, index: int) -> list[dict[str, str]]:
+        service = f"urn:dslforum-org:service:WLANConfiguration:{index}"
+        values = self.soap(f"wlanconfig{index}", service, "GetTotalAssociations")
+        total = parse_int(values.get("NewTotalAssociations")) or 0
+        entries: list[dict[str, str]] = []
+        for position in range(total):
+            try:
+                entry = self.soap(
+                    f"wlanconfig{index}",
+                    service,
+                    "GetGenericAssociatedDeviceInfo",
+                    {"NewAssociatedDeviceIndex": str(position)},
+                )
+            except FritzBoxError:
+                break
+            entries.append(entry)
+        return entries
 
     def get_hosts(self) -> HostFetch:
         values = self.soap(

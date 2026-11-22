@@ -1,0 +1,181 @@
+{% extends "base.html" %}
+{% from "_macros.html" import ip_link %}
+{% block title %}WLAN - Fritz!Box LAN DNS{% endblock %}
+{% block content %}
+<div class="toolbar">
+    <div>
+        <h2>WLAN</h2>
+        {% if wlan and wlan.started_at %}
+        <p class="meta">Stand: {{ wlan.started_at }}{% if latest %} · Snapshot {{ latest.id }}{% endif %}</p>
+        {% elif latest %}
+        <p class="meta">Snapshot {{ latest.id }} · {{ latest.started_at }}</p>
+        {% else %}
+        <p class="meta">Noch kein Snapshot vorhanden.</p>
+        {% endif %}
+    </div>
+    <div>
+        <a class="reset-link" href="/hosts">Hosts</a>
+        <a class="reset-link" href="/topology">Topologie</a>
+    </div>
+</div>
+
+{% if latest and latest.warning %}
+<div class="alert warning">{{ latest.warning }}</div>
+{% endif %}
+
+{% if not wlan %}
+<p class="empty">Noch keine WLAN-Daten vorhanden.</p>
+{% else %}
+<div class="stat-grid">
+    <div class="box stat-box">
+        <div class="box-title">📶 AP-Radios</div>
+        <div class="stat-value">{{ wlan.summary.ap_radios }}</div>
+        <div class="stat-label">aktiv konfiguriert</div>
+    </div>
+    <div class="box stat-box">
+        <div class="box-title">📱 WLAN-Clients</div>
+        <div class="stat-value">{{ wlan.summary.clients }}</div>
+        <div class="stat-label">verbunden</div>
+    </div>
+    <div class="box stat-box">
+        <div class="box-title">📡 Bänder</div>
+        <div class="stat-value stat-value-small">
+            2.4: {{ wlan.summary.bands["2.4 GHz"] }} ·
+            5: {{ wlan.summary.bands["5 GHz"] }} ·
+            6: {{ wlan.summary.bands["6 GHz"] }}
+        </div>
+        <div class="stat-label">AP-Radios pro Band</div>
+    </div>
+    <div class="box stat-box">
+        <div class="box-title">🔐 Gast</div>
+        <div class="stat-value">{{ wlan.summary.guest_radios }}</div>
+        <div class="stat-label">Gast-Radios</div>
+    </div>
+</div>
+
+{% for device in wlan.devices %}
+<div class="box wlan-device">
+    <div class="wlan-device-head">
+        <div>
+            <div class="wlan-device-name">{{ device.name }}</div>
+            <div class="meta">
+                {{ device.model or "Modell unbekannt" }}
+                {% if device.ip %} · {{ ip_link(device.ip, device.ip_open) }}{% endif %}
+                · {{ device.online_label }}
+                · <span class="badge source-{{ device.source }}">{{ device.source_label }}</span>
+            </div>
+            {% if device.description %}<div class="meta">{{ device.description }}</div>{% endif %}
+        </div>
+        <div class="wlan-device-counts">
+            {{ device.ap_count }} AP{% if device.uplinks %} · {{ device.uplinks|length }} Uplink{% endif %} · {{ device.client_count }} Clients
+        </div>
+    </div>
+
+    {% if device.interfaces %}
+    <table data-sortable>
+        <thead>
+            <tr>
+                <th scope="col">Interface</th>
+                <th scope="col">Modus</th>
+                <th scope="col">Band</th>
+                <th scope="col">Kanal</th>
+                <th scope="col">Breite</th>
+                <th scope="col">Auslastung</th>
+                <th scope="col">SSID</th>
+                <th scope="col">Sicherheit</th>
+                <th scope="col">Streams</th>
+                <th scope="col">Clients</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for iface in device.interfaces %}
+        <tr>
+            <td><code>{{ iface.interface_name or "-" }}</code></td>
+            <td>{{ iface.mode_label }}{% if iface.is_guest %} <span class="badge">Gast</span>{% endif %}</td>
+            <td><span class="chip {{ iface.band_class }}">{{ iface.band or "-" }}</span></td>
+            <td>{{ iface.channel or "-" }}</td>
+            <td>{{ iface.channel_width or "-" }}</td>
+            <td><span class="utilization {{ iface.utilization_class }}">{{ iface.utilization_label }}</span></td>
+            <td>{{ iface.ssid or "-" }}</td>
+            <td>{{ iface.security_label }}</td>
+            <td>{{ iface.streams_label }}</td>
+            <td>{{ iface.client_count }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    {% if device.uplinks %}
+    <div class="wlan-subtitle">Uplink</div>
+    <table data-sortable>
+        <thead>
+            <tr>
+                <th scope="col">Interface</th>
+                <th scope="col">Modus</th>
+                <th scope="col">Band</th>
+                <th scope="col">Kanal</th>
+                <th scope="col">Breite</th>
+                <th scope="col">Auslastung</th>
+                <th scope="col">Sicherheit</th>
+                <th scope="col">Streams</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for iface in device.uplinks %}
+        <tr>
+            <td><code>{{ iface.interface_name or "-" }}</code></td>
+            <td>{{ iface.mode_label }}</td>
+            <td><span class="chip {{ iface.band_class }}">{{ iface.band or "-" }}</span></td>
+            <td>{{ iface.channel or "-" }}</td>
+            <td>{{ iface.channel_width or "-" }}</td>
+            <td><span class="utilization {{ iface.utilization_class }}">{{ iface.utilization_label }}</span></td>
+            <td>{{ iface.security_label }}</td>
+            <td>{{ iface.streams_label }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</div>
+{% endfor %}
+
+<div class="box">
+    <div class="box-title">WLAN-Clients</div>
+    <table data-sortable>
+        <thead>
+            <tr>
+                <th scope="col">AP</th>
+                <th scope="col">SSID</th>
+                <th scope="col">Client</th>
+                <th scope="col">IP</th>
+                <th scope="col">MAC</th>
+                <th scope="col">Signal</th>
+                <th scope="col">Rate</th>
+                <th scope="col">Status</th>
+                <th scope="col">Quelle</th>
+                <th scope="col">Beschreibung</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for client in wlan.clients %}
+        <tr class="{% if not client.online %}offline{% endif %}">
+            <td>{{ client.ap_device_name }}{% if client.ap_interface_name %} <span class="meta">({{ client.ap_interface_name }})</span>{% endif %}</td>
+            <td>{{ client.ap_ssid or "-" }}{% if client.ap_band %} <span class="chip {{ client.ap_band_class }}">{{ client.ap_band }}</span>{% endif %}</td>
+            <td>{{ client.client_name }}</td>
+            <td>{{ ip_link(client.client_ip, client.http_open) }}</td>
+            <td><code>{{ client.client_mac or "-" }}</code></td>
+            <td><span class="signal {{ client.signal_class }}">{{ client.signal_label }}</span></td>
+            <td>{{ client.rate_label }}</td>
+            <td>{% if client.online %}<span class="badge active">online</span>{% else %}<span class="badge stale">offline</span>{% endif %}</td>
+            <td>{% if client.source %}<span class="badge source-{{ client.source }}">{{ client.source_label }}</span>{% else %}-{% endif %}</td>
+            <td class="muted-cell">{{ client.description }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="10" class="empty">Keine WLAN-Clients in diesem Snapshot.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endblock %}

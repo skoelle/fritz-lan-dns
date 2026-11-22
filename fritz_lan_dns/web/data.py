@@ -124,6 +124,221 @@ def mwan3_view(entry: dict | None) -> dict | None:
     }
 
 
+_BAND_CLASS = {"2.4 GHz": "band-24", "5 GHz": "band-5", "6 GHz": "band-6"}
+_BAND_ORDER = {"2.4 GHz": 0, "5 GHz": 1, "6 GHz": 2, "": 9}
+_SECURITY_LABELS = {
+    "WPA2PSK": "WPA2-PSK",
+    "WPA3PSK": "WPA3-PSK",
+    "WPA2_WPA3_MIXED": "WPA2/WPA3",
+    "WPAand11i": "WPA/WPA2",
+    "11iandWPA3": "WPA2/WPA3",
+    "OWE": "OWE",
+    "UNDEFINED": "-",
+}
+_OPMODE_LABELS = {
+    "AP": "AP",
+    "AP_GUEST": "Gast-AP",
+    "REPEATER": "Uplink (Repeater)",
+    "STATION": "Uplink (Client)",
+}
+
+
+def _utilization_class(value: int | None) -> str:
+    if value is None:
+        return "unknown"
+    if value <= 30:
+        return "low"
+    if value <= 60:
+        return "medium"
+    return "high"
+
+
+def _signal_class(value: int | None, unit: str) -> str:
+    if value is None:
+        return "unknown"
+    if unit == "%":
+        if value >= 70:
+            return "good"
+        if value >= 40:
+            return "medium"
+        return "bad"
+    if value >= -60:
+        return "good"
+    if value >= -75:
+        return "medium"
+    return "bad"
+
+
+def _interface_view(interface: dict, clients: list[dict]) -> dict:
+    band = str(interface.get("band") or "")
+    utilization = interface.get("channel_utilization")
+    try:
+        utilization_value = int(utilization) if utilization is not None else None
+    except (TypeError, ValueError):
+        utilization_value = None
+    streams_tx = interface.get("streams_tx")
+    streams_rx = interface.get("streams_rx")
+    if streams_tx and streams_rx:
+        streams_label = f"{streams_tx}×{streams_rx}"
+    elif streams_tx or streams_rx:
+        streams_label = f"{streams_tx or streams_rx}×"
+    else:
+        streams_label = "-"
+    security = str(interface.get("security") or "")
+    return dict(interface) | {
+        "band_class": _BAND_CLASS.get(band, "band-unknown"),
+        "mode_label": _OPMODE_LABELS.get(
+            str(interface.get("opmode") or "").upper(),
+            str(interface.get("opmode") or "-"),
+        ),
+        "security_label": _SECURITY_LABELS.get(security, security or "-"),
+        "utilization_label": (
+            f"{utilization_value} %" if utilization_value is not None else "-"
+        ),
+        "utilization_class": _utilization_class(utilization_value),
+        "streams_label": streams_label,
+        "clients": clients,
+    }
+
+
+def wlan_view(entry: dict | None, open_ips: set[str] | None = None) -> dict | None:
+    if not entry:
+        return None
+    open_ips = open_ips or set()
+    data = entry.get("data") or {}
+    interfaces = [
+        item for item in data.get("interfaces") or [] if isinstance(item, dict)
+    ]
+    raw_clients = [
+        item for item in data.get("clients") or [] if isinstance(item, dict)
+    ]
+
+    clients_by_ap: dict[tuple[str, str], list[dict]] = defaultdict(list)
+    for client in raw_clients:
+        signal = client.get("signal")
+        try:
+            signal_value = int(signal) if signal is not None else None
+        except (TypeError, ValueError):
+            signal_value = None
+        unit = str(client.get("signal_unit") or "")
+        signal_label = (
+            f"{signal_value} {unit}".strip() if signal_value is not None else "-"
+        )
+        rx = client.get("rx_kbps")
+        tx = client.get("tx_kbps")
+        rates = []
+        for value in (rx, tx):
+            try:
+                rates.append(f"{int(value) / 1000:.0f}")
+            except (TypeError, ValueError):
+                rates.append("-")
+        rate_label = f"{rates[0]} / {rates[1]} Mbit/s"
+        ip = client.get("client_ip")
+        ap_band = str(client.get("ap_band") or "")
+        clients_by_ap[
+            (str(client.get("ap_node_uid") or ""), str(client.get("ap_interface_name") or ""))
+        ].append(
+            dict(client)
+            | {
+                "ap_band_class": _BAND_CLASS.get(ap_band, "band-unknown"),
+                "signal_label": signal_label,
+                "signal_class": _signal_class(signal_value, unit),
+                "rate_label": rate_label,
+                "source_label": source_label(client.get("source")),
+                "http_open": bool(ip and ip in open_ips),
+                "http_url": http_url(ip) if ip and ip in open_ips else None,
+            }
+        )
+
+    devices_by_key: dict[str, dict] = {}
+    for interface in interfaces:
+        key = str(
+            interface.get("device_ip")
+            or interface.get("node_uid")
+            or interface.get("device_name")
+        )
+        device = devices_by_key.setdefault(
+            key,
+            {
+                "key": key,
+                "name": str(interface.get("device_name") or "-"),
+                "model": str(interface.get("device_model") or ""),
+                "ip": interface.get("device_ip"),
+                "online": bool(interface.get("online")),
+                "source": str(interface.get("source") or ""),
+                "source_label": source_label(interface.get("source")),
+                "description": str(interface.get("description") or ""),
+                "interfaces": [],
+                "uplinks": [],
+                "ap_count": 0,
+                "guest_count": 0,
+                "client_count": 0,
+            },
+        )
+        iface_clients = clients_by_ap.get(
+            (
+                str(interface.get("node_uid") or ""),
+                str(interface.get("interface_name") or ""),
+            ),
+            [],
+        )
+        view = _interface_view(interface, iface_clients)
+        if interface.get("is_uplink"):
+            device["uplinks"].append(view)
+        else:
+            device["interfaces"].append(view)
+            device["ap_count"] += 1
+            if interface.get("is_guest"):
+                device["guest_count"] += 1
+            device["client_count"] += len(iface_clients)
+
+    devices = list(devices_by_key.values())
+    for device in devices:
+        device["interfaces"].sort(
+            key=lambda item: (
+                _BAND_ORDER.get(str(item.get("band") or ""), 9),
+                str(item.get("interface_name") or "").lower(),
+            )
+        )
+        device["uplinks"].sort(
+            key=lambda item: str(item.get("interface_name") or "").lower()
+        )
+        device["online_label"] = "🟢 online" if device["online"] else "🔴 offline"
+        device["ip_open"] = bool(device["ip"] and device["ip"] in open_ips)
+    devices.sort(key=lambda item: item["name"].lower())
+
+    clients = [client for items in clients_by_ap.values() for client in items]
+    clients.sort(
+        key=lambda item: (
+            str(item.get("ap_device_name") or "").lower(),
+            str(item.get("ap_interface_name") or "").lower(),
+            str(item.get("client_name") or "").lower(),
+        )
+    )
+
+    ap_interfaces = [
+        interface for interface in interfaces if not interface.get("is_uplink")
+    ]
+    bands = {
+        band: sum(1 for item in ap_interfaces if item.get("band") == band)
+        for band in ("2.4 GHz", "5 GHz", "6 GHz")
+    }
+    return {
+        "started_at": entry.get("started_at"),
+        "devices": devices,
+        "clients": clients,
+        "summary": {
+            "devices": len(devices),
+            "online_devices": sum(1 for device in devices if device["online"]),
+            "ap_radios": len(ap_interfaces),
+            "uplinks": len(interfaces) - len(ap_interfaces),
+            "clients": len(clients),
+            "guest_radios": sum(1 for item in ap_interfaces if item.get("is_guest")),
+            "bands": bands,
+        },
+    }
+
+
 def dashboard(conn: sqlite3.Connection, settings: Settings) -> dict:
     latest = db.latest_snapshot(conn)
     latest_ok = db.latest_snapshot(conn, only_successful=True)
@@ -135,14 +350,16 @@ def dashboard(conn: sqlite3.Connection, settings: Settings) -> dict:
         failed_latest = None
     counts = db.counts(conn)
     dns_records = db.load_dns_records(conn)
+    open_ips = db.load_http_open_ips(conn)
     return {
         "latest": latest,
         "history": history_rows,
         "failed": dict(failed_latest) if failed_latest else None,
         "counts": counts,
         "conflicts": [record for record in dns_records if record.status == "conflict"],
-        "http_open_ips": db.load_http_open_ips(conn),
+        "http_open_ips": open_ips,
         "mwan3": mwan3_view(db.latest_mwan3(conn)),
+        "wlan": wlan_view(db.latest_wlan(conn), open_ips),
         "settings": settings,
     }
 
@@ -369,6 +586,15 @@ def hosts(
         }
         for row in rows
     ]
+
+
+def wlan(conn: sqlite3.Connection) -> dict:
+    open_ips = db.load_http_open_ips(conn)
+    return {
+        "latest": db.latest_snapshot(conn),
+        "wlan": wlan_view(db.latest_wlan(conn), open_ips),
+        "http_open_ips": open_ips,
+    }
 
 
 def dns(conn: sqlite3.Connection, settings: Settings) -> dict:

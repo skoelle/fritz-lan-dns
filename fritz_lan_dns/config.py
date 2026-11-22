@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -100,6 +101,10 @@ class Settings:
     dns_container_root: str
     fritz_timeout: int
     fritz_verify_tls: bool
+    fritz_repeater_ips: str
+    fritz_repeater_user: str
+    fritz_repeater_pw: str
+    fritz_repeater_timeout: int
     openwrt_enabled: bool
     openwrt_url: str
     openwrt_user: str
@@ -129,6 +134,18 @@ class Settings:
     @property
     def raw_dir(self) -> Path:
         return self.data_root / "raw"
+
+    @property
+    def fritz_repeater_ip_list(self) -> tuple[str, ...]:
+        seen: set[str] = set()
+        values: list[str] = []
+        for part in re.split(r"[,;\s]+", self.fritz_repeater_ips):
+            value = part.strip()
+            if not value or value in seen:
+                continue
+            seen.add(value)
+            values.append(value)
+        return tuple(values)
 
     def ensure_dirs(self) -> None:
         for directory in (self.data_root, self.db_root, self.dns_root, self.raw_dir):
@@ -168,12 +185,15 @@ class Settings:
 def build_settings(env_file: Path | None = None) -> Settings:
     load_env(env_file)
     box_ip = _env("BoxIP") or _env("BOX_IP") or ""
+    box_user = _env("BoxUSER") or _env("BOX_USER") or ""
+    box_pw = _env("BoxPW") or _env("BOX_PW") or ""
+    fritz_timeout = _env_int("FRITZ_TIMEOUT", 25)
     device_names = _env_path("DEVICE_NAMES_FILE", ROOT / "config" / "device-names.conf")
     return Settings(
         root=ROOT,
         box_ip=box_ip,
-        box_user=_env("BoxUSER") or _env("BOX_USER") or "",
-        box_pw=_env("BoxPW") or _env("BOX_PW") or "",
+        box_user=box_user,
+        box_pw=box_pw,
         data_root=_env_path("FRITZ_LAN_DNS_DATA_ROOT", ROOT / "data"),
         db_root=_env_path("FRITZ_LAN_DNS_DB_ROOT", ROOT / "db"),
         dns_root=_env_path("FRITZ_LAN_DNS_DNS_ROOT", ROOT / "dns"),
@@ -198,8 +218,12 @@ def build_settings(env_file: Path | None = None) -> Settings:
         or (f"{box_ip}:53" if box_ip else ""),
         dns_ns_ip=_env("DNS_NS_IP") or "",
         dns_container_root=_env("DNS_CONTAINER_ROOT") or "/zones",
-        fritz_timeout=_env_int("FRITZ_TIMEOUT", 25),
+        fritz_timeout=fritz_timeout,
         fritz_verify_tls=_env_bool("FRITZ_VERIFY_TLS", False),
+        fritz_repeater_ips=_env("FRITZ_REPEATER_IPS") or "",
+        fritz_repeater_user=_env("FRITZ_REPEATER_USER") or box_user,
+        fritz_repeater_pw=_env("FRITZ_REPEATER_PW") or box_pw,
+        fritz_repeater_timeout=_env_int("FRITZ_REPEATER_TIMEOUT", fritz_timeout),
         openwrt_enabled=_env_bool("OPENWRT_ENABLED", False),
         openwrt_url=(_env("OPENWRT_URL") or "").rstrip("/"),
         openwrt_user=_env("OPENWRT_USER") or "",

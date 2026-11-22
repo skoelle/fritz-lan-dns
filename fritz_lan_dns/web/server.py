@@ -94,13 +94,16 @@ def api_status() -> JSONResponse:
     with _conn() as conn:
         latest = db.latest_snapshot(conn)
         counts = db.counts(conn)
+        open_ips = db.load_http_open_ips(conn)
         mwan3 = web_data.mwan3_view(db.latest_mwan3(conn))
+        wlan = web_data.wlan_view(db.latest_wlan(conn), open_ips)
     return JSONResponse(
         {
             "scheduler": scheduler.status(),
             "latest": latest,
             "counts": counts,
             "mwan3": mwan3,
+            "wlan": wlan["summary"] if wlan else None,
         }
     )
 
@@ -141,6 +144,19 @@ def api_hosts(q: str = "", status: str = "", source: str = "") -> JSONResponse:
     with _conn() as conn:
         rows = web_data.hosts(conn, query=q, status=status, source=source)
     return JSONResponse({"hosts": rows})
+
+
+@app.get("/api/wlan")
+def api_wlan() -> JSONResponse:
+    with _conn() as conn:
+        result = web_data.wlan(conn)
+    return JSONResponse(
+        {
+            "latest": result["latest"],
+            "wlan": result["wlan"],
+            "http_open_ips": sorted(result["http_open_ips"]),
+        }
+    )
 
 
 @app.get("/api/dns")
@@ -202,6 +218,17 @@ def topology_page(request: Request) -> HTMLResponse:
         request,
         "topology.html",
         {"request": request, "active_page": "topology", **context},
+    )
+
+
+@app.get("/wlan", response_class=HTMLResponse)
+def wlan_page(request: Request) -> HTMLResponse:
+    with _conn() as conn:
+        context = web_data.wlan(conn)
+    return templates.TemplateResponse(
+        request,
+        "wlan.html",
+        {"request": request, "active_page": "wlan", **context},
     )
 
 

@@ -38,6 +38,38 @@
     <div class="box stat-box"><div class="box-title">HTTP :80</div><div class="stat-value">{{ counts.http_open }}</div><div class="stat-label">offene Webports</div></div>
 </div>
 
+{% if wlan %}
+<div class="box">
+    <div class="box-title">📶 WLAN</div>
+    <p class="hint">
+        {% if wlan.started_at %}Stand: {{ wlan.started_at }} · {% endif %}
+        {{ wlan.summary.ap_radios }} AP-Radios · {{ wlan.summary.clients }} WLAN-Clients ·
+        <a href="/wlan">Details</a>
+    </p>
+    <table>
+        <thead><tr><th>Gerät</th><th>Band</th><th>Kanal</th><th>Breite</th><th>Auslastung</th><th>SSID</th><th>Clients</th></tr></thead>
+        <tbody>
+        {% for device in wlan.devices %}
+        {% for iface in device.interfaces %}
+        <tr>
+            <td>
+                <strong>{{ device.name }}</strong>
+                {% if iface.is_guest %}<span class="badge">Gast</span>{% endif %}
+            </td>
+            <td><span class="chip {{ iface.band_class }}">{{ iface.band or "-" }}</span></td>
+            <td>{{ iface.channel or "-" }}</td>
+            <td>{{ iface.channel_width or "-" }}</td>
+            <td><span class="utilization {{ iface.utilization_class }}">{{ iface.utilization_label }}</span></td>
+            <td>{{ iface.ssid or "-" }}</td>
+            <td>{{ iface.client_count }}</td>
+        </tr>
+        {% endfor %}
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
 {% if mwan3 %}
 <div class="box">
     <div class="box-title">🌐 MultiWAN (OpenWrt)</div>

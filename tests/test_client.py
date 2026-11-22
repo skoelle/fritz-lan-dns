@@ -1,6 +1,10 @@
 from __future__ import annotations
 
-from fritz_lan_dns.fritz.client import _parse_new_values, load_mesh_json
+from fritz_lan_dns.fritz.client import (
+    FritzClient,
+    _parse_new_values,
+    load_mesh_json,
+)
 
 
 def test_parse_soap_values() -> None:
@@ -20,3 +24,35 @@ def test_parse_soap_values() -> None:
 def test_load_mesh_json_tolerates_trailing_commas() -> None:
     raw = '{"nodes": [{"uid": "a", "device_name": "x",},],}'
     assert load_mesh_json(raw)["nodes"][0]["uid"] == "a"
+
+
+class FakeSoapResponse:
+    def __init__(self, text: str, status_code: int = 200) -> None:
+        self.text = text
+        self.status_code = status_code
+
+
+def test_client_reads_wlan_configuration_and_associations(monkeypatch) -> None:
+    responses = iter(
+        [
+            "<root><NewSSID>example</NewSSID><NewChannel>36</NewChannel></root>",
+            "<root><NewTotalAssociations>2</NewTotalAssociations></root>",
+            "<root><NewAssociatedDeviceMACAddress>aa:bb:cc:00:00:01</NewAssociatedDeviceMACAddress></root>",
+            "<root><NewAssociatedDeviceMACAddress>aa:bb:cc:00:00:02</NewAssociatedDeviceMACAddress></root>",
+        ]
+    )
+    client = FritzClient("192.0.2.10", "user", "password")
+    monkeypatch.setattr(
+        client.session,
+        "post",
+        lambda *args, **kwargs: FakeSoapResponse(next(responses)),
+    )
+
+    assert client.get_wlan_info(2) == {
+        "NewSSID": "example",
+        "NewChannel": "36",
+    }
+    associations = client.get_wlan_associations(2)
+    assert len(associations) == 2
+    assert associations[0]["NewAssociatedDeviceMACAddress"] == "aa:bb:cc:00:00:01"
+    assert associations[1]["NewAssociatedDeviceMACAddress"] == "aa:bb:cc:00:00:02"
