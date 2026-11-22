@@ -94,6 +94,7 @@ OPENWRT_USER=ubusro
 OPENWRT_PASSWORD=openwrt-password
 OPENWRT_TIMEOUT=25
 OPENWRT_VERIFY_TLS=0
+OPENWRT_TOPOLOGY_PARENT_IP=192.0.2.1
 ```
 
 `DNS_FALLBACK_MODE=fritz.box` (Default) fragt bei einem MISS
@@ -320,6 +321,12 @@ Hosts, die nur über die FRITZ!Box-Mesh-Topologie bekannt sind, zählen dort zur
 Quelle `FritzBox`. Die Hosts-Seite hat zusätzlich einen Quellen-Filter.
 Schlägt der OpenWrt-Abruf fehl, bleibt der FRITZ!Box-Abruf erfolgreich und der
 Fehler wird als Warnung im Snapshot vermerkt.
+
+Mit `OPENWRT_TOPOLOGY_PARENT_IP` werden aktive OpenWrt-Clients als Sub-Nodes
+unter dem Mesh-Gerät mit dieser IP in der Topologie angezeigt. Inaktive
+OpenWrt-Hosts erscheinen zusätzlich in der Offline-Sektion. Die Injection
+passiert beim Rendern aus der aktuellen Host-Tabelle und ist daher nicht in
+historischen Snapshots enthalten.
 
 Für den Dauerbetrieb empfiehlt sich ein Read-only-User statt `root`. Auf dem
 Router per SSH:

@@ -15,8 +15,8 @@ from tests.helpers import make_settings
 FIXTURE = Path(__file__).parent / "fixtures" / "mesh.json"
 
 
-def _settings(tmp_path: Path):
-    return make_settings(tmp_path)
+def _settings(tmp_path: Path, **overrides):
+    return make_settings(tmp_path, **overrides)
 
 
 def _mesh():
@@ -128,7 +128,7 @@ def test_web_data_topology_hosts_and_dns(tmp_path: Path) -> None:
         records = build_dns_records(db.load_hosts(conn), [], settings.dns_domain)
         db.replace_dns_records(conn, records)
 
-        topology = web_data.topology(conn)
+        topology = web_data.topology(conn, settings)
         assert topology["master"] is not None
         assert topology["master"].device_name == "router"
         assert len(topology["offline"]) == 1
@@ -244,6 +244,127 @@ def test_init_schema_migrates_dns_source(tmp_path: Path) -> None:
     assert "source" in columns
 
 
+def test_topology_attaches_openwrt_hosts(tmp_path: Path) -> None:
+    settings = _settings(
+        tmp_path,
+        openwrt_enabled=True,
+        openwrt_topology_parent_ip="192.0.2.80",
+    )
+    db.init_schema(settings.db_path)
+    nodes = [
+        _node("master", "router", "192.0.2.1", role="master"),
+        _node("parent", "OpenWrt", "192.0.2.80", parent="master"),
+    ]
+    mesh = MeshSnapshot(nodes=nodes, links=[], master_uid="master", raw={})
+    active = HostRecord(
+        key="mac:ow-active",
+        hostname="ow-active",
+        ip="192.0.2.150",
+        mac="aa:bb:cc:99:00:01",
+        active=True,
+        source="openwrt",
+    )
+    inactive = HostRecord(
+        key="mac:ow-offline",
+        hostname="ow-offline",
+        ip="192.0.2.151",
+        mac="aa:bb:cc:99:00:02",
+        active=False,
+        source="openwrt",
+    )
+    with db.connect(settings.db_path) as conn:
+        _store(conn, mesh, [active, inactive])
+        result = web_data.topology(conn, settings)
+
+    rows = {row["node"].device_name: row for row in result["rows"]}
+    parent_row = rows["OpenWrt"]
+    child_row = rows["ow-active"]
+    assert child_row["node"].parent_uid == "parent"
+    assert child_row["depth"] == parent_row["depth"] + 1
+    assert child_row["source"] == "openwrt"
+    assert "ow-offline" not in rows
+
+    offline_names = [row["node"].device_name for row in result["offline_rows"]]
+    assert "ow-offline" in offline_names
+    assert "ow-active" not in offline_names
+    off_row = next(
+        row for row in result["offline_rows"] if row["node"].device_name == "ow-offline"
+    )
+    assert off_row["depth"] == 0
+    assert off_row["source"] == "openwrt"
+
+    assert result["summary"]["total"] == 2
+    assert result["summary"]["offline"] == 0
+    assert result["openwrt_note"] == ""
+
+
+def test_topology_openwrt_parent_missing(tmp_path: Path) -> None:
+    settings = _settings(
+        tmp_path,
+        openwrt_enabled=True,
+        openwrt_topology_parent_ip="192.0.2.99",
+    )
+    db.init_schema(settings.db_path)
+    mesh = MeshSnapshot(
+        nodes=[_node("master", "router", "192.0.2.1", role="master")],
+        links=[],
+        master_uid="master",
+        raw={},
+    )
+    active = HostRecord(
+        key="mac:ow-active",
+        hostname="ow-active",
+        ip="192.0.2.150",
+        mac="aa:bb:cc:99:00:01",
+        active=True,
+        source="openwrt",
+    )
+    inactive = HostRecord(
+        key="mac:ow-offline",
+        hostname="ow-offline",
+        ip="192.0.2.151",
+        mac="aa:bb:cc:99:00:02",
+        active=False,
+        source="openwrt",
+    )
+    with db.connect(settings.db_path) as conn:
+        _store(conn, mesh, [active, inactive])
+        result = web_data.topology(conn, settings)
+
+    assert "192.0.2.99" in result["openwrt_note"]
+    assert all(row["source"] != "openwrt" for row in result["rows"])
+    offline_names = [row["node"].device_name for row in result["offline_rows"]]
+    assert offline_names == ["ow-offline"]
+
+
+def test_topology_openwrt_disabled_by_default(tmp_path: Path) -> None:
+    settings = _settings(tmp_path, openwrt_topology_parent_ip="192.0.2.80")
+    db.init_schema(settings.db_path)
+    mesh = MeshSnapshot(
+        nodes=[
+            _node("master", "router", "192.0.2.1", role="master"),
+            _node("parent", "OpenWrt", "192.0.2.80", parent="master"),
+        ],
+        links=[],
+        master_uid="master",
+        raw={},
+    )
+    active = HostRecord(
+        key="mac:ow-active",
+        hostname="ow-active",
+        ip="192.0.2.150",
+        mac="aa:bb:cc:99:00:01",
+        active=True,
+        source="openwrt",
+    )
+    with db.connect(settings.db_path) as conn:
+        _store(conn, mesh, [active])
+        result = web_data.topology(conn, settings)
+
+    assert result["openwrt_note"] == ""
+    assert all(row["source"] != "openwrt" for row in result["rows"])
+
+
 def test_topology_groups_direct_devices_then_slaves_by_ip(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     db.init_schema(settings.db_path)
@@ -261,7 +382,7 @@ def test_topology_groups_direct_devices_then_slaves_by_ip(tmp_path: Path) -> Non
     mesh = MeshSnapshot(nodes=nodes, links=[], master_uid="master", raw={})
     with db.connect(settings.db_path) as conn:
         _store(conn, mesh, [])
-        topology = web_data.topology(conn)
+        topology = web_data.topology(conn, settings)
 
     order = [row["node"].device_name for row in topology["rows"] if not row["is_master"]]
     assert order == [
@@ -314,7 +435,7 @@ def test_http_status_web_annotations(tmp_path: Path) -> None:
         assert printer["http_open"] is True
         assert printer["http_url"] == "http://192.0.2.50/"
 
-        topology = web_data.topology(conn)
+        topology = web_data.topology(conn, settings)
         assert "192.0.2.10" in topology["http_open_ips"]
 
         dns = web_data.dns(conn, settings)

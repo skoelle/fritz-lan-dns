@@ -6,7 +6,7 @@ from collections import defaultdict
 
 from .. import db
 from ..config import Settings
-from ..models import MeshNode
+from ..models import HostRecord, MeshNode
 from ..util import http_url, source_filter_values, source_label
 
 _CONNECTION_META = {
@@ -89,11 +89,16 @@ def _table_row(node: MeshNode, depth: int, is_master: bool) -> dict:
         "plc_icon": plc["icon"],
         "plc_class": plc["css"],
         "online_label": "🟢 online" if node.online else "🔴 offline",
+        "source": node.source,
     }
 
 
 def _name_key(node: MeshNode) -> tuple[str, str]:
     return (node.device_name.lower(), node.uid)
+
+
+def _child_key(node: MeshNode) -> tuple[int, str, str]:
+    return (1 if node.source == "openwrt" else 0, node.device_name.lower(), node.uid)
 
 
 def _ip_key(node: MeshNode) -> tuple[int, int, str, str]:
@@ -106,7 +111,32 @@ def _ip_key(node: MeshNode) -> tuple[int, int, str, str]:
     return (0, int(address), node.device_name.lower(), node.uid)
 
 
-def topology(conn: sqlite3.Connection) -> dict:
+def _openwrt_parent_ip(settings: Settings) -> str:
+    if not settings.openwrt_enabled:
+        return ""
+    return (settings.openwrt_topology_parent_ip or "").strip()
+
+
+def _openwrt_host_node(
+    host: HostRecord, *, parent_uid: str | None, online: bool
+) -> MeshNode:
+    return MeshNode(
+        uid=f"openwrt:{host.key}",
+        device_name=host.hostname or host.ip or host.key,
+        device_model="",
+        mesh_role="",
+        ip=host.ip,
+        mac=host.mac,
+        online=online,
+        parent_uid=parent_uid,
+        connection_type="",
+        description=host.description,
+        source="openwrt",
+    )
+
+
+def topology(conn: sqlite3.Connection, settings: Settings) -> dict:
+    openwrt_parent_ip = _openwrt_parent_ip(settings)
     latest = db.latest_snapshot(conn)
     if latest is None:
         return {
@@ -118,6 +148,8 @@ def topology(conn: sqlite3.Connection) -> dict:
             "links": [],
             "master": None,
             "summary": {"total": 0, "online": 0, "offline": 0, "plc": 0},
+            "openwrt_parent": None,
+            "openwrt_note": "",
             "http_open_ips": db.load_http_open_ips(conn),
         }
 
@@ -129,6 +161,37 @@ def topology(conn: sqlite3.Connection) -> dict:
         parent = node.parent_uid if node.parent_uid in by_uid else None
         children[parent].append(node)
 
+    openwrt_parent = None
+    openwrt_children: list[MeshNode] = []
+    openwrt_offline: list[MeshNode] = []
+    openwrt_note = ""
+    if openwrt_parent_ip:
+        openwrt_parent = next(
+            (node for node in nodes if node.ip == openwrt_parent_ip), None
+        )
+        existing_ips = {node.ip for node in nodes if node.ip}
+        for host in db.load_hosts(conn):
+            if host.source != "openwrt" or not host.hostname or not host.ip:
+                continue
+            if host.ip in existing_ips:
+                continue
+            if host.active:
+                if openwrt_parent is not None:
+                    openwrt_children.append(
+                        _openwrt_host_node(host, parent_uid=openwrt_parent.uid, online=True)
+                    )
+            else:
+                openwrt_offline.append(
+                    _openwrt_host_node(host, parent_uid=None, online=False)
+                )
+        if openwrt_parent is None:
+            openwrt_note = f"OpenWrt-Parent {openwrt_parent_ip} nicht gefunden"
+
+    if openwrt_parent is not None:
+        for node in openwrt_children:
+            by_uid[node.uid] = node
+            children[openwrt_parent.uid].append(node)
+
     rows: list[dict] = []
     visited: set[str] = set()
 
@@ -138,7 +201,7 @@ def topology(conn: sqlite3.Connection) -> dict:
             return
         visited.add(uid)
         rows.append(_table_row(node, depth, is_master))
-        for child in sorted(children.get(uid, []), key=_name_key):
+        for child in sorted(children.get(uid, []), key=_child_key):
             walk(child.uid, depth + 1, False)
 
     master_uid = next(
@@ -153,7 +216,7 @@ def topology(conn: sqlite3.Connection) -> dict:
 
         direct = sorted(
             (node for node in children.get(root_uid, []) if node.mesh_role.lower() != "slave"),
-            key=_name_key,
+            key=_child_key,
         )
         slaves = sorted(
             (node for node in children.get(root_uid, []) if node.mesh_role.lower() == "slave"),
@@ -171,15 +234,18 @@ def topology(conn: sqlite3.Connection) -> dict:
         "offline": len(offline),
         "plc": sum(1 for node in nodes if (node.connection_type or "").upper() == "PLC"),
     }
+    offline_all = offline + openwrt_offline
     return {
         "latest": latest,
         "rows": rows,
-        "offline": offline,
-        "offline_rows": [_table_row(node, 0, False) for node in offline],
+        "offline": offline_all,
+        "offline_rows": [_table_row(node, 0, False) for node in offline_all],
         "online": online,
         "links": links,
         "master": by_uid.get(master_uid) if master_uid else None,
         "summary": summary,
+        "openwrt_parent": openwrt_parent,
+        "openwrt_note": openwrt_note,
         "http_open_ips": db.load_http_open_ips(conn),
     }
 

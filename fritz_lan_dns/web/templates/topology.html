@@ -9,6 +9,10 @@
     </div>
 </div>
 
+{% if openwrt_note %}
+<div class="alert warning">{{ openwrt_note }}</div>
+{% endif %}
+
 {% if not latest %}
 <p class="empty">Noch keine Topologie vorhanden.</p>
 {% else %}
@@ -68,6 +72,7 @@
         <tr class="{% if not row.node.online %}offline{% endif %}">
             <td class="device-cell">
                 <span class="device-indent" style="--depth: {{ row.indent }}">{{ row.node.device_name }}</span>
+                {% if row.source == 'openwrt' %}<span class="badge source-openwrt">OpenWrt</span>{% endif %}
             </td>
             <td>
                 {% if row.connection_label %}
@@ -115,6 +120,7 @@
         <tr class="offline">
             <td class="device-cell">
                 <span class="device-indent" style="--depth: {{ row.indent }}">{{ row.node.device_name }}</span>
+                {% if row.source == 'openwrt' %}<span class="badge source-openwrt">OpenWrt</span>{% endif %}
             </td>
             <td>-</td>
             <td>{% if row.role_label %}<span class="chip role-chip">{{ row.role_label }}</span>{% endif %}</td>

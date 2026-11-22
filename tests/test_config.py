@@ -50,6 +50,7 @@ def test_build_settings_has_no_private_defaults(tmp_path, monkeypatch) -> None:
         "OPENWRT_URL",
         "OPENWRT_USER",
         "OPENWRT_PASSWORD",
+        "OPENWRT_TOPOLOGY_PARENT_IP",
     ):
         monkeypatch.delenv(key, raising=False)
     settings = build_settings(env_file=tmp_path / "missing.env")
@@ -62,3 +63,4 @@ def test_build_settings_has_no_private_defaults(tmp_path, monkeypatch) -> None:
     assert settings.openwrt_enabled is False
     assert settings.openwrt_url == ""
     assert settings.openwrt_user == ""
+    assert settings.openwrt_topology_parent_ip == ""

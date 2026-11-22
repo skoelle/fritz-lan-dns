@@ -44,6 +44,7 @@ def make_settings(tmp_path: Path, **overrides) -> Settings:
         "openwrt_password": "",
         "openwrt_timeout": 25,
         "openwrt_verify_tls": False,
+        "openwrt_topology_parent_ip": "",
         "log_level": "INFO",
     }
     values.update(overrides)

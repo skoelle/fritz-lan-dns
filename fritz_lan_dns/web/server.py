@@ -108,7 +108,7 @@ async def api_refresh(request: Request) -> JSONResponse:
 @app.get("/api/topology")
 def api_topology() -> JSONResponse:
     with _conn() as conn:
-        result = web_data.topology(conn)
+        result = web_data.topology(conn, settings)
     open_ips = result["http_open_ips"]
     return JSONResponse(
         {
@@ -189,7 +189,7 @@ def index(request: Request) -> HTMLResponse:
 @app.get("/topology", response_class=HTMLResponse)
 def topology_page(request: Request) -> HTMLResponse:
     with _conn() as conn:
-        context = web_data.topology(conn)
+        context = web_data.topology(conn, settings)
     return templates.TemplateResponse(
         request,
         "topology.html",

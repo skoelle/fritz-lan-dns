@@ -17,6 +17,7 @@ class MeshNode:
     plc_rx_kbps: int | None = None
     plc_tx_kbps: int | None = None
     description: str = ""
+    source: str = "mesh"
 
 
 @dataclass

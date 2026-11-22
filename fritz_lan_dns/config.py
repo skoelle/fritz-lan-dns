@@ -106,6 +106,7 @@ class Settings:
     openwrt_password: str
     openwrt_timeout: int
     openwrt_verify_tls: bool
+    openwrt_topology_parent_ip: str
     log_level: str
 
     @property
@@ -204,5 +205,6 @@ def build_settings(env_file: Path | None = None) -> Settings:
         openwrt_password=_env("OPENWRT_PASSWORD") or "",
         openwrt_timeout=_env_int("OPENWRT_TIMEOUT", 25),
         openwrt_verify_tls=_env_bool("OPENWRT_VERIFY_TLS", False),
+        openwrt_topology_parent_ip=_env("OPENWRT_TOPOLOGY_PARENT_IP") or "",
         log_level=(_env("LOG_LEVEL") or "INFO").upper(),
     )
