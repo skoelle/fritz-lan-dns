@@ -127,6 +127,10 @@ Tags:
 Falls das GHCR-Package nach dem ersten Build noch privat ist, in den
 GitHub-Package-Einstellungen auf **public** stellen.
 
+Nach dem Push ruft der Workflow optional den Deploy-Webhook auf. Dafür müssen
+die Repository-Secrets `WEBHOOK_URL` und `WEBHOOK_TOKEN` gesetzt sein. Ein
+Webhook-Fehler oder `summary.updated <= 0` lässt den Workflow fehlschlagen.
+
 Für lokale Entwicklung:
 
 ```bash
