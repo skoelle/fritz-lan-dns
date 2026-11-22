@@ -107,6 +107,15 @@ CREATE TABLE IF NOT EXISTS settings (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS http_status (
+    ip TEXT PRIMARY KEY,
+    open INTEGER NOT NULL DEFAULT 0,
+    fail_count INTEGER NOT NULL DEFAULT 0,
+    first_open_at TEXT,
+    last_open_at TEXT,
+    last_checked_at TEXT
+);
 """
 
 
@@ -390,6 +399,63 @@ def load_dns_records(conn: sqlite3.Connection) -> list[DnsRecord]:
     ]
 
 
+def record_http_scan(
+    conn: sqlite3.Connection,
+    results: dict[str, bool],
+    *,
+    fail_threshold: int = 2,
+    checked_at: str | None = None,
+) -> None:
+    if not results:
+        return
+    now = checked_at or iso_now()
+    threshold = max(1, fail_threshold)
+    for ip, is_open in results.items():
+        if not ip:
+            continue
+        if is_open:
+            conn.execute(
+                """
+                INSERT INTO http_status (
+                    ip, open, fail_count, first_open_at, last_open_at,
+                    last_checked_at
+                ) VALUES (?, 1, 0, ?, ?, ?)
+                ON CONFLICT(ip) DO UPDATE SET
+                    open = 1,
+                    fail_count = 0,
+                    first_open_at = COALESCE(
+                        http_status.first_open_at, excluded.first_open_at
+                    ),
+                    last_open_at = excluded.last_open_at,
+                    last_checked_at = excluded.last_checked_at
+                """,
+                (ip, now, now, now),
+            )
+        else:
+            conn.execute(
+                """
+                INSERT INTO http_status (
+                    ip, open, fail_count, first_open_at, last_open_at,
+                    last_checked_at
+                ) VALUES (?, 0, 1, NULL, NULL, ?)
+                ON CONFLICT(ip) DO UPDATE SET
+                    fail_count = http_status.fail_count + 1,
+                    open = CASE
+                        WHEN http_status.fail_count + 1 >= ? THEN 0
+                        ELSE http_status.open
+                    END,
+                    last_checked_at = excluded.last_checked_at
+                """,
+                (ip, now, threshold),
+            )
+    conn.commit()
+
+
+def load_http_open_ips(conn: sqlite3.Connection) -> set[str]:
+    rows = conn.execute("SELECT ip FROM http_status WHERE open = 1").fetchall()
+    return {row["ip"] for row in rows}
+
+
 def load_dns_static(conn: sqlite3.Connection) -> list[dict]:
     rows = conn.execute(
         "SELECT hostname, ip, comment FROM dns_static ORDER BY hostname"
@@ -514,6 +580,18 @@ def prune_hosts(conn: sqlite3.Connection, retention_days: int) -> int:
     return cur.rowcount
 
 
+def prune_http_status(conn: sqlite3.Connection, retention_days: int) -> int:
+    if retention_days <= 0:
+        return 0
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=retention_days)).isoformat()
+    cur = conn.execute(
+        "DELETE FROM http_status WHERE open = 0 AND last_checked_at < ?",
+        (cutoff,),
+    )
+    conn.commit()
+    return cur.rowcount
+
+
 def counts(conn: sqlite3.Connection) -> dict:
     latest = latest_snapshot(conn)
     if latest is None:
@@ -524,6 +602,9 @@ def counts(conn: sqlite3.Connection) -> dict:
             "active_hosts": 0,
             "dns_records": 0,
             "dns_conflicts": 0,
+            "http_open": conn.execute(
+                "SELECT COUNT(*) FROM http_status WHERE open = 1"
+            ).fetchone()[0],
         }
     snapshot_id = latest["id"]
     return {
@@ -536,6 +617,9 @@ def counts(conn: sqlite3.Connection) -> dict:
         ).fetchone()[0],
         "dns_conflicts": conn.execute(
             "SELECT COUNT(*) FROM dns_records WHERE status = 'conflict'"
+        ).fetchone()[0],
+        "http_open": conn.execute(
+            "SELECT COUNT(*) FROM http_status WHERE open = 1"
         ).fetchone()[0],
         "snapshot_id": snapshot_id,
     }

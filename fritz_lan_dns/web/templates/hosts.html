@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import ip_link %}
 {% block title %}Hosts - Fritz!Box LAN DNS{% endblock %}
 {% block content %}
 <div class="toolbar">
@@ -34,7 +35,7 @@
         {% for host in hosts %}
         <tr class="{% if not host.active %}offline{% endif %}">
             <td>{{ host.hostname or "-" }}</td>
-            <td><code>{{ host.ip or "-" }}</code></td>
+            <td>{{ ip_link(host.ip, host.http_open) }}</td>
             <td><code>{{ host.mac or "-" }}</code></td>
             <td>{% if host.active %}<span class="badge active">aktiv</span>{% else %}<span class="badge stale">inaktiv</span>{% endif %}</td>
             <td>{{ host.interface_type or "-" }}</td>

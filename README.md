@@ -57,6 +57,12 @@ FETCH_INTERVAL_MINUTES=60
 WEB_HOST=0.0.0.0
 WEB_PORT=8346
 
+# Port-80-Scan aktiver Hosts
+HTTP_SCAN_ENABLED=1
+HTTP_SCAN_TIMEOUT=1.0
+HTTP_SCAN_WORKERS=16
+HTTP_SCAN_FAIL_THRESHOLD=2
+
 DNS_DOMAIN=example.test
 DNS_ZONE_TTL=60
 DNS_INCLUDE_IPV6=0
@@ -80,6 +86,14 @@ RAW_RETENTION_DAYS=30
 `DNS_FALLBACK_MODE=bare` fragt bei einem MISS den nackten Hostnamen `foo` bei
 der FRITZ!Box an. `DNS_FALLBACK_MODE=fritz.box` würde stattdessen
 `foo.fritz.box` fragen.
+
+Nach jedem Abruf werden die aktiven Hosts zusätzlich auf einen offenen
+TCP-Port 80 geprüft (`HTTP_SCAN_ENABLED`). Der Status wird pro IP gespeichert
+und latcht: War Port 80 einmal offen, bleibt das so, bis zwei aufeinanderfolgende
+Scans eines aktiven Hosts fehlschlagen (`HTTP_SCAN_FAIL_THRESHOLD`). Ein
+Offline-Gehen des Hosts widerlegt den Status nicht. Offene Webports werden in
+Hosts, Topologie, DNS, Dashboard und den API-Antworten als `target="_blank"`-Link
+auf `http://<ip>/` dargestellt.
 
 Optional können Gerätebeschreibungen gepflegt werden:
 
@@ -218,7 +232,7 @@ ist der Default für den Container.
 ## Daten und Verzeichnisse
 
 ```text
-db/fritz_lan_dns.db          SQLite mit Snapshots, Hosts, DNS-Records
+db/fritz_lan_dns.db          SQLite mit Snapshots, Hosts, DNS-Records, HTTP-Status
 data/raw/                    Rohdaten der letzten Abrufe
 dns/hosts                    CoreDNS-hosts-Datei
 dns/<dns-domain>.zone        Zone-Datei für Export/Diagnose

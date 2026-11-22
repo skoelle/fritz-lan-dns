@@ -6,6 +6,7 @@ from collections import defaultdict
 from .. import db
 from ..config import Settings
 from ..models import MeshNode
+from ..util import http_url
 
 _CONNECTION_META = {
     "LAN": ("🔌", "LAN", "lan"),
@@ -66,6 +67,7 @@ def dashboard(conn: sqlite3.Connection, settings: Settings) -> dict:
         "failed": dict(failed_latest) if failed_latest else None,
         "counts": counts,
         "conflicts": [record for record in dns_records if record.status == "conflict"],
+        "http_open_ips": db.load_http_open_ips(conn),
         "settings": settings,
     }
 
@@ -101,6 +103,7 @@ def topology(conn: sqlite3.Connection) -> dict:
             "links": [],
             "master": None,
             "summary": {"total": 0, "online": 0, "offline": 0, "plc": 0},
+            "http_open_ips": db.load_http_open_ips(conn),
         }
 
     nodes = db.nodes_for_snapshot(conn, latest["id"])
@@ -151,6 +154,7 @@ def topology(conn: sqlite3.Connection) -> dict:
         "links": links,
         "master": by_uid.get(master_uid) if master_uid else None,
         "summary": summary,
+        "http_open_ips": db.load_http_open_ips(conn),
     }
 
 
@@ -183,7 +187,15 @@ def hosts(
         """,
         params,
     ).fetchall()
-    return [dict(row) for row in rows]
+    open_ips = db.load_http_open_ips(conn)
+    return [
+        dict(row)
+        | {
+            "http_open": row["ip"] in open_ips,
+            "http_url": http_url(row["ip"]) if row["ip"] in open_ips else None,
+        }
+        for row in rows
+    ]
 
 
 def dns(conn: sqlite3.Connection, settings: Settings) -> dict:
@@ -196,6 +208,7 @@ def dns(conn: sqlite3.Connection, settings: Settings) -> dict:
         "serial": db.get_setting(conn, "zone_serial", "0"),
         "settings": settings,
         "conflicts": [record for record in records if record.status == "conflict"],
+        "http_open_ips": db.load_http_open_ips(conn),
     }
 
 
@@ -214,4 +227,5 @@ def snapshot(conn: sqlite3.Connection, snapshot_id: int) -> dict | None:
         "snapshot": detail,
         "nodes": db.nodes_for_snapshot(conn, snapshot_id),
         "links": db.links_for_snapshot(conn, snapshot_id),
+        "http_open_ips": db.load_http_open_ips(conn),
     }

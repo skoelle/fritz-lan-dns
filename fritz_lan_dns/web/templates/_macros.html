@@ -1,0 +1,6 @@
+{% macro ip_link(ip, is_open) -%}
+{%- if not ip -%}-
+{%- elif is_open -%}<a href="{{ http_url(ip) }}" target="_blank" rel="noopener noreferrer"><code>{{ ip }}</code></a>
+{%- else -%}<code>{{ ip }}</code>
+{%- endif -%}
+{%- endmacro %}

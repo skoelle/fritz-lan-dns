@@ -15,6 +15,7 @@ from .. import db
 from ..config import ConfigError, build_settings
 from ..dns import ensure_dns_files
 from ..scheduler import FetchScheduler
+from ..util import http_url
 from . import data as web_data
 
 LOGGER = logging.getLogger("fritz_lan_dns.web")
@@ -53,14 +54,23 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="Fritz!Box LAN DNS", version="0.1.0", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(BASE / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE / "templates"))
+templates.env.globals["http_url"] = http_url
 
 
 def _conn():
     return db.connect(settings.db_path)
 
 
-def _serialize_records(records):
-    return [asdict(record) for record in records]
+def _http_fields(ip: str | None, open_ips: set[str]) -> dict:
+    is_open = bool(ip and ip in open_ips)
+    return {
+        "http_open": is_open,
+        "http_url": http_url(ip) if is_open else None,
+    }
+
+
+def _serialize_records(records, open_ips: set[str]):
+    return [asdict(record) | _http_fields(record.ip, open_ips) for record in records]
 
 
 @app.get("/health")
@@ -98,11 +108,20 @@ async def api_refresh(request: Request) -> JSONResponse:
 def api_topology() -> JSONResponse:
     with _conn() as conn:
         result = web_data.topology(conn)
+    open_ips = result["http_open_ips"]
     return JSONResponse(
         {
             "latest": result["latest"],
-            "nodes": [asdict(row["node"]) | {"depth": row["depth"]} for row in result["rows"]],
-            "offline": [asdict(node) for node in result["offline"]],
+            "nodes": [
+                asdict(row["node"])
+                | {"depth": row["depth"]}
+                | _http_fields(row["node"].ip, open_ips)
+                for row in result["rows"]
+            ],
+            "offline": [
+                asdict(node) | _http_fields(node.ip, open_ips)
+                for node in result["offline"]
+            ],
             "links": [asdict(link) for link in result["links"]],
         }
     )
@@ -121,7 +140,7 @@ def api_dns() -> JSONResponse:
         result = web_data.dns(conn, settings)
     return JSONResponse(
         {
-            "records": _serialize_records(result["records"]),
+            "records": _serialize_records(result["records"], result["http_open_ips"]),
             "static": result["static"],
             "serial": result["serial"],
             "latest": result["latest"],
@@ -142,10 +161,14 @@ def api_snapshot(snapshot_id: int) -> JSONResponse:
         result = web_data.snapshot(conn, snapshot_id)
     if result is None:
         raise HTTPException(status_code=404, detail="Snapshot nicht gefunden")
+    open_ips = result["http_open_ips"]
     return JSONResponse(
         {
             "snapshot": result["snapshot"],
-            "nodes": [asdict(node) for node in result["nodes"]],
+            "nodes": [
+                asdict(node) | _http_fields(node.ip, open_ips)
+                for node in result["nodes"]
+            ],
             "links": [asdict(link) for link in result["links"]],
         }
     )

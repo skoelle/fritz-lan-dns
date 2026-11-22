@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import ip_link %}
 {% block title %}Dashboard - Fritz!Box LAN DNS{% endblock %}
 {% block content %}
 <div class="toolbar">
@@ -28,6 +29,7 @@
     <div class="box stat-box"><div class="box-title">Hosts</div><div class="stat-value">{{ counts.hosts }}</div><div class="stat-label">{{ counts.active_hosts }} aktiv</div></div>
     <div class="box stat-box"><div class="box-title">DNS-Records</div><div class="stat-value">{{ counts.dns_records }}</div><div class="stat-label">in hosts-Datei</div></div>
     <div class="box stat-box"><div class="box-title">Konflikte</div><div class="stat-value">{{ counts.dns_conflicts }}</div><div class="stat-label">nicht geschrieben</div></div>
+    <div class="box stat-box"><div class="box-title">HTTP :80</div><div class="stat-value">{{ counts.http_open }}</div><div class="stat-label">offene Webports</div></div>
 </div>
 
 <div class="box">
@@ -56,7 +58,7 @@
         <thead><tr><th>Hostname</th><th>IP</th><th>Grund</th></tr></thead>
         <tbody>
         {% for record in conflicts %}
-        <tr><td>{{ record.fqdn }}</td><td><code>{{ record.ip }}</code></td><td>{{ record.conflict or "" }}</td></tr>
+        <tr><td>{{ record.fqdn }}</td><td>{{ ip_link(record.ip, record.ip in http_open_ips) }}</td><td>{{ record.conflict or "" }}</td></tr>
         {% endfor %}
         </tbody>
     </table>

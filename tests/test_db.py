@@ -139,6 +139,50 @@ def test_web_data_topology_hosts_and_dns(tmp_path: Path) -> None:
         assert dashboard["counts"]["nodes"] == len(mesh.nodes)
 
 
+def test_http_status_latches_until_disproven(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    db.init_schema(settings.db_path)
+    with db.connect(settings.db_path) as conn:
+        db.record_http_scan(conn, {"192.0.2.50": True}, fail_threshold=2)
+        assert db.load_http_open_ips(conn) == {"192.0.2.50"}
+
+        db.record_http_scan(conn, {}, fail_threshold=2)
+        assert db.load_http_open_ips(conn) == {"192.0.2.50"}
+
+        db.record_http_scan(conn, {"192.0.2.50": False}, fail_threshold=2)
+        assert db.load_http_open_ips(conn) == {"192.0.2.50"}
+
+        db.record_http_scan(conn, {"192.0.2.50": False}, fail_threshold=2)
+        assert db.load_http_open_ips(conn) == set()
+
+        db.record_http_scan(conn, {"192.0.2.50": True}, fail_threshold=2)
+        assert db.load_http_open_ips(conn) == {"192.0.2.50"}
+        assert db.counts(conn)["http_open"] >= 1
+
+
+def test_http_status_web_annotations(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    db.init_schema(settings.db_path)
+    mesh = _mesh()
+    with db.connect(settings.db_path) as conn:
+        _store(conn, mesh, [_host("printer", "192.0.2.50")])
+        db.replace_dns_records(
+            conn, build_dns_records(db.load_hosts(conn), [], settings.dns_domain)
+        )
+        db.record_http_scan(conn, {"192.0.2.50": True, "192.0.2.10": True})
+
+        rows = web_data.hosts(conn)
+        printer = next(row for row in rows if row["ip"] == "192.0.2.50")
+        assert printer["http_open"] is True
+        assert printer["http_url"] == "http://192.0.2.50/"
+
+        topology = web_data.topology(conn)
+        assert "192.0.2.10" in topology["http_open_ips"]
+
+        dns = web_data.dns(conn, settings)
+        assert "192.0.2.50" in dns["http_open_ips"]
+
+
 def test_prune_old_snapshots(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     db.init_schema(settings.db_path)

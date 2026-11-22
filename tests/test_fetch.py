@@ -68,6 +68,40 @@ def test_run_fetch_end_to_end(tmp_path: Path, monkeypatch) -> None:
         assert latest["zone_serial"] == 1
 
 
+def test_run_fetch_scans_only_active_hosts(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path)
+    monkeypatch.setattr("fritz_lan_dns.fetch.FritzClient", FakeClient)
+    scanned: list[set[str]] = []
+
+    def fake_scan(ips, **kwargs):
+        scanned.append(set(ips))
+        return {ip: True for ip in ips}
+
+    monkeypatch.setattr("fritz_lan_dns.fetch.scan_ports", fake_scan)
+    result = run_fetch(settings)
+
+    assert len(scanned) == 1
+    assert "192.0.2.50" in scanned[0]
+    assert "192.0.2.40" not in scanned[0]
+    assert result["http_open"] == len(scanned[0])
+    with db.connect(settings.db_path) as conn:
+        open_ips = db.load_http_open_ips(conn)
+    assert "192.0.2.50" in open_ips
+    assert "192.0.2.40" not in open_ips
+
+
+def test_run_fetch_disabled_scan_keeps_state(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(tmp_path, http_scan_enabled=False)
+    monkeypatch.setattr("fritz_lan_dns.fetch.FritzClient", FakeClient)
+
+    def fail_scan(*args, **kwargs):
+        raise AssertionError("Scan darf nicht laufen")
+
+    monkeypatch.setattr("fritz_lan_dns.fetch.scan_ports", fail_scan)
+    result = run_fetch(settings)
+    assert result["http_open"] == 0
+
+
 def test_run_fetch_failure_keeps_old_dns_files(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     monkeypatch.setattr("fritz_lan_dns.fetch.FritzClient", FakeClient)

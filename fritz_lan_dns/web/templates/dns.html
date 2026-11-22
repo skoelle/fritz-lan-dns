@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_macros.html" import ip_link %}
 {% block title %}DNS - Fritz!Box LAN DNS{% endblock %}
 {% block content %}
 <div class="toolbar">
@@ -29,7 +30,7 @@
         {% for record in records %}
         <tr class="{% if record.status == 'conflict' %}conflict{% endif %}">
             <td>{{ record.fqdn }}</td>
-            <td><code>{{ record.ip }}</code></td>
+            <td>{{ ip_link(record.ip, record.ip in http_open_ips) }}</td>
             <td><code>{{ record.mac or "-" }}</code></td>
             <td><span class="badge {{ record.status }}">{{ record.status }}</span></td>
             <td>{{ record.last_seen or "-" }}</td>

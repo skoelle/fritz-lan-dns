@@ -44,6 +44,16 @@ def _env_int(name: str, default: int) -> int:
         return default
 
 
+def _env_float(name: str, default: float) -> float:
+    value = _env(name)
+    if value in (None, ""):
+        return default
+    try:
+        return float(value)
+    except ValueError:
+        return default
+
+
 def _env_bool(name: str, default: bool) -> bool:
     value = _env(name)
     if value in (None, ""):
@@ -73,6 +83,10 @@ class Settings:
     snapshot_retention_days: int
     raw_retention_days: int
     host_retention_days: int
+    http_scan_enabled: bool
+    http_scan_timeout: float
+    http_scan_workers: int
+    http_scan_fail_threshold: int
     web_host: str
     web_port: int
     scheduler_enabled: bool
@@ -163,6 +177,10 @@ def build_settings(env_file: Path | None = None) -> Settings:
         snapshot_retention_days=_env_int("SNAPSHOT_RETENTION_DAYS", 90),
         raw_retention_days=_env_int("RAW_RETENTION_DAYS", 30),
         host_retention_days=_env_int("DNS_HOST_RETENTION_DAYS", 90),
+        http_scan_enabled=_env_bool("HTTP_SCAN_ENABLED", True),
+        http_scan_timeout=_env_float("HTTP_SCAN_TIMEOUT", 1.0),
+        http_scan_workers=_env_int("HTTP_SCAN_WORKERS", 16),
+        http_scan_fail_threshold=_env_int("HTTP_SCAN_FAIL_THRESHOLD", 2),
         web_host=_env("WEB_HOST") or "0.0.0.0",
         web_port=_env_int("WEB_PORT", 8346),
         scheduler_enabled=_env_bool("SCHEDULER_ENABLED", True),

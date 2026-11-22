@@ -30,6 +30,14 @@ def parse_int(value: object) -> int | None:
         return None
 
 
+def http_url(ip: str | None) -> str | None:
+    if not ip:
+        return None
+    if ":" in ip and not ip.startswith("["):
+        return f"http://[{ip}]/"
+    return f"http://{ip}/"
+
+
 def load_device_names(path: Path) -> dict[str, str]:
     descriptions: dict[str, str] = {}
     if not path.exists():

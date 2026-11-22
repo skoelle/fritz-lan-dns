@@ -10,6 +10,7 @@ from .config import Settings
 from .dns import build_dns_records, ensure_dns_files, write_dns_files
 from .fritz import FritzClient, load_mesh_json, parse_host_entries, parse_mesh
 from .merge import merge_hosts
+from .portscan import scan_ports
 from .util import iso_now, load_device_names
 
 LOGGER = logging.getLogger("fritz_lan_dns.fetch")
@@ -76,6 +77,28 @@ def run_fetch(settings: Settings, legacy_json: Path | None = None) -> dict:
                 )
             hosts = merge_hosts(host_entries, mesh.nodes, descriptions)
 
+            http_results: dict[str, bool] = {}
+            if settings.http_scan_enabled:
+                targets = {host.ip for host in hosts if host.active and host.ip}
+                try:
+                    http_results = scan_ports(
+                        targets,
+                        timeout=settings.http_scan_timeout,
+                        workers=settings.http_scan_workers,
+                    )
+                    db.record_http_scan(
+                        conn,
+                        http_results,
+                        fail_threshold=settings.http_scan_fail_threshold,
+                    )
+                except Exception as exc:  # noqa: BLE001 - Scan darf Fetch nicht stoppen
+                    LOGGER.warning("Port-80-Scan fehlgeschlagen: %s", exc)
+                    warning = (
+                        (warning + "; " if warning else "")
+                        + "Port-80-Scan fehlgeschlagen"
+                    )
+            http_open_count = sum(1 for value in http_results.values() if value)
+
             _write_raw(settings, "mesh", mesh_text)
             _write_raw(settings, "hosts", host_fetch.raw_xml)
             if legacy_json is not None:
@@ -114,14 +137,17 @@ def run_fetch(settings: Settings, legacy_json: Path | None = None) -> dict:
             )
             db.prune_snapshots(conn, settings.snapshot_retention_days)
             db.prune_hosts(conn, settings.host_retention_days)
+            db.prune_http_status(conn, settings.host_retention_days)
             prune_raw_files(settings)
             LOGGER.info(
-                "Snapshot %s: %s Nodes (%s online), %s Hosts, %s DNS-Records",
+                "Snapshot %s: %s Nodes (%s online), %s Hosts, %s DNS-Records, "
+                "%s HTTP-Ports",
                 snapshot_id,
                 len(mesh.nodes),
                 sum(1 for node in mesh.nodes if node.online),
                 len(hosts),
                 dns_summary["records"],
+                http_open_count,
             )
             return {
                 "snapshot_id": snapshot_id,
@@ -130,6 +156,7 @@ def run_fetch(settings: Settings, legacy_json: Path | None = None) -> dict:
                 "hosts": len(hosts),
                 "dns_records": dns_summary["records"],
                 "dns_conflicts": dns_summary["conflicts"],
+                "http_open": http_open_count,
                 "zone_serial": dns_summary["serial"],
                 "warning": warning,
                 "duration_ms": duration_ms,
