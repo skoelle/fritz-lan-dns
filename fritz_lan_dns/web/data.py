@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 import sqlite3
 from collections import defaultdict
 
@@ -91,6 +92,20 @@ def _table_row(node: MeshNode, depth: int, is_master: bool) -> dict:
     }
 
 
+def _name_key(node: MeshNode) -> tuple[str, str]:
+    return (node.device_name.lower(), node.uid)
+
+
+def _ip_key(node: MeshNode) -> tuple[int, int, str, str]:
+    try:
+        address = ipaddress.IPv4Address(node.ip) if node.ip else None
+    except ValueError:
+        address = None
+    if address is None:
+        return (1, 0, node.device_name.lower(), node.uid)
+    return (0, int(address), node.device_name.lower(), node.uid)
+
+
 def topology(conn: sqlite3.Connection) -> dict:
     latest = db.latest_snapshot(conn)
     if latest is None:
@@ -113,8 +128,6 @@ def topology(conn: sqlite3.Connection) -> dict:
     for node in nodes:
         parent = node.parent_uid if node.parent_uid in by_uid else None
         children[parent].append(node)
-    for group in children.values():
-        group.sort(key=lambda node: (node.device_name.lower(), node.uid))
 
     rows: list[dict] = []
     visited: set[str] = set()
@@ -125,7 +138,7 @@ def topology(conn: sqlite3.Connection) -> dict:
             return
         visited.add(uid)
         rows.append(_table_row(node, depth, is_master))
-        for child in children.get(uid, []):
+        for child in sorted(children.get(uid, []), key=_name_key):
             walk(child.uid, depth + 1, False)
 
     master_uid = next(
@@ -134,7 +147,24 @@ def topology(conn: sqlite3.Connection) -> dict:
     )
     root_uid = master_uid or (nodes[0].uid if nodes else None)
     if root_uid:
-        walk(root_uid, 0, root_uid == master_uid)
+        root = by_uid[root_uid]
+        visited.add(root_uid)
+        rows.append(_table_row(root, 0, root_uid == master_uid))
+
+        direct = sorted(children.get(root_uid, []), key=_name_key)
+        direct_uids = {node.uid for node in direct}
+        for node in direct:
+            if node.uid in visited:
+                continue
+            visited.add(node.uid)
+            rows.append(_table_row(node, 1, False))
+
+        slaves = sorted(
+            (node for node in nodes if node.parent_uid in direct_uids),
+            key=_ip_key,
+        )
+        for node in slaves:
+            walk(node.uid, 2, False)
 
     offline = [node for node in nodes if not node.online or node.uid not in visited]
     offline.sort(key=lambda node: (node.device_name.lower(), node.uid))

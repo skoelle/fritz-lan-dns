@@ -6,7 +6,7 @@ from pathlib import Path
 from fritz_lan_dns import db
 from fritz_lan_dns.dns import build_dns_records, ensure_dns_files, write_dns_files
 from fritz_lan_dns.fritz.mesh import parse_mesh
-from fritz_lan_dns.models import HostRecord
+from fritz_lan_dns.models import HostRecord, MeshNode, MeshSnapshot
 from fritz_lan_dns.util import iso_now
 from fritz_lan_dns.web import data as web_data
 from tests.helpers import make_settings
@@ -31,6 +31,27 @@ def _host(name: str, ip: str, *, active: bool = True) -> HostRecord:
         active=active,
         source="fritz",
         last_seen=iso_now(),
+    )
+
+
+def _node(
+    uid: str,
+    name: str,
+    ip: str,
+    *,
+    parent: str | None = None,
+    role: str = "client",
+    online: bool = True,
+) -> MeshNode:
+    return MeshNode(
+        uid=uid,
+        device_name=name,
+        device_model="",
+        mesh_role=role,
+        ip=ip,
+        mac=None,
+        online=online,
+        parent_uid=parent,
     )
 
 
@@ -137,6 +158,29 @@ def test_web_data_topology_hosts_and_dns(tmp_path: Path) -> None:
 
         dashboard = web_data.dashboard(conn, settings)
         assert dashboard["counts"]["nodes"] == len(mesh.nodes)
+
+
+def test_topology_orders_direct_devices_then_slaves_by_ip(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    db.init_schema(settings.db_path)
+    nodes = [
+        _node("master", "router", "192.0.2.1", role="master"),
+        _node("zulu", "zulu", "192.0.2.2", parent="master", role="repeater"),
+        _node("alpha", "alpha", "192.0.2.50", parent="master"),
+        _node("alpha-zeta", "zeta", "192.0.2.60", parent="alpha"),
+        _node("alpha-able", "Able", "192.0.2.70", parent="alpha"),
+        _node("zulu-child", "child", "192.0.2.3", parent="zulu"),
+        _node("child-zeta", "zeta", "192.0.2.90", parent="zulu-child"),
+        _node("child-able", "Able", "192.0.2.91", parent="zulu-child"),
+    ]
+    mesh = MeshSnapshot(nodes=nodes, links=[], master_uid="master", raw={})
+    with db.connect(settings.db_path) as conn:
+        _store(conn, mesh, [])
+        topology = web_data.topology(conn)
+
+    order = [row["node"].device_name for row in topology["rows"] if not row["is_master"]]
+    assert order == ["alpha", "zulu", "child", "Able", "zeta", "zeta", "Able"]
+    assert [row["depth"] for row in topology["rows"]] == [0, 1, 1, 2, 3, 3, 2, 2]
 
 
 def test_http_status_latches_until_disproven(tmp_path: Path) -> None:
