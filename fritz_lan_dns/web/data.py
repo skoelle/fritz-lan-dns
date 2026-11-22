@@ -355,6 +355,14 @@ def wlan_view(entry: dict | None, open_ips: set[str] | None = None) -> dict | No
                 device["guest_count"] += 1
             device["client_count"] += len(iface_clients)
 
+    def device_ip_key(device: dict) -> tuple[int, int, int, str]:
+        name = str(device.get("name") or "").lower()
+        try:
+            address = ipaddress.ip_address(str(device.get("ip")))
+        except (TypeError, ValueError):
+            return (1, 0, 0, name)
+        return (0, address.version, int(address), name)
+
     devices = list(devices_by_key.values())
     for device in devices:
         device["interfaces"].sort(
@@ -368,7 +376,7 @@ def wlan_view(entry: dict | None, open_ips: set[str] | None = None) -> dict | No
         )
         device["online_label"] = "🟢 online" if device["online"] else "🔴 offline"
         device["ip_open"] = bool(device["ip"] and device["ip"] in open_ips)
-    devices.sort(key=lambda item: item["name"].lower())
+    devices.sort(key=device_ip_key)
 
     clients = [client for items in clients_by_ap.values() for client in items]
     clients.sort(

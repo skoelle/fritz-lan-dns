@@ -571,6 +571,63 @@ def test_latest_wlan_roundtrip_and_view(tmp_path: Path) -> None:
         assert view["clients"][0]["http_url"] == "http://192.0.2.20/"
 
 
+def test_wlan_devices_sorted_by_ip() -> None:
+    def interface(
+        name: str, uid: str, ip: str | None, *, source: str = "mesh"
+    ) -> dict:
+        return {
+            "node_uid": uid,
+            "device_name": name,
+            "device_model": "",
+            "device_ip": ip,
+            "online": True,
+            "source": source,
+            "description": "",
+            "interface_name": "AP:5G:0",
+            "ssid": "example",
+            "band": "5 GHz",
+            "channel": 36,
+            "channel_width": "80 MHz",
+            "channel_utilization": 10,
+            "security": "WPA2PSK",
+            "opmode": "AP",
+            "phymodes": "ac",
+            "streams_tx": 2,
+            "streams_rx": 2,
+            "steering_enabled": True,
+            "is_guest": False,
+            "is_uplink": False,
+            "client_count": 0,
+        }
+
+    entry = {
+        "started_at": "2026-11-22T20:00:00+00:00",
+        "data": {
+            "interfaces": [
+                interface("zeta", "device-20", "192.0.2.20"),
+                interface(
+                    "omega",
+                    "device-5",
+                    "192.0.2.5",
+                    source="fritz-repeater",
+                ),
+                interface("alpha", "device-10", "192.0.2.10"),
+                interface("no-ip", "device-0", None),
+            ],
+            "clients": [],
+        },
+    }
+
+    view = web_data.wlan_view(entry)
+    assert view is not None
+    assert [device["name"] for device in view["devices"]] == [
+        "omega",
+        "alpha",
+        "zeta",
+        "no-ip",
+    ]
+
+
 def test_init_schema_migrates_wlan_json(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     settings.db_path.parent.mkdir(parents=True, exist_ok=True)
