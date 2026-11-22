@@ -7,7 +7,12 @@ from collections import defaultdict
 from .. import db
 from ..config import Settings
 from ..models import HostRecord, MeshNode
-from ..util import http_url, source_filter_values, source_label
+from ..util import (
+    format_duration,
+    http_url,
+    source_filter_values,
+    source_label,
+)
 
 _CONNECTION_META = {
     "LAN": ("🔌", "LAN", "lan"),
@@ -51,6 +56,74 @@ def plc_display(rx_kbps: int | None, tx_kbps: int | None) -> dict[str, str]:
     return {"label": label, "icon": "🟢", "css": "ok"}
 
 
+_MWAN3_STATUS_CLASS = {
+    "online": "ok",
+    "offline": "failed",
+    "unknown": "stale",
+    "notracking": "stale",
+}
+
+
+def mwan3_view(entry: dict | None) -> dict | None:
+    if not entry:
+        return None
+    data = entry.get("data") or {}
+    interfaces = []
+    for name, item in (data.get("interfaces") or {}).items():
+        if not isinstance(item, dict):
+            continue
+        tracks = [track for track in item.get("track_ip") or [] if isinstance(track, dict)]
+        up = sum(
+            1 for track in tracks if str(track.get("status", "")).lower() == "up"
+        )
+        skipped = sum(
+            1 for track in tracks if str(track.get("status", "")).lower() == "skipped"
+        )
+        status = str(item.get("status") or "unknown").lower()
+        tracking = item.get("tracking") or (
+            "active" if item.get("running") else "inactive"
+        )
+        interfaces.append(
+            {
+                "name": name,
+                "status": status,
+                "status_class": _MWAN3_STATUS_CLASS.get(status, "stale"),
+                "tracking": tracking,
+                "online": format_duration(item.get("online")),
+                "uptime": format_duration(item.get("uptime")),
+                "score": item.get("score"),
+                "lost": item.get("lost"),
+                "track_up": up,
+                "track_skipped": skipped,
+                "track_total": len(tracks),
+            }
+        )
+    interfaces.sort(key=lambda row: row["name"].lower())
+
+    policies = []
+    for family, values in (data.get("policies") or {}).items():
+        if not isinstance(values, dict):
+            continue
+        for name, members in values.items():
+            clean_members = [
+                {"interface": member.get("interface"), "percent": member.get("percent")}
+                for member in members or []
+                if isinstance(member, dict) and member.get("interface")
+            ]
+            policies.append(
+                {"family": family, "name": name, "members": clean_members}
+            )
+
+    connected = data.get("connected") or {}
+    return {
+        "started_at": entry.get("started_at"),
+        "interfaces": interfaces,
+        "policies": policies,
+        "connected_v4": len(connected.get("ipv4") or []),
+        "connected_v6": len(connected.get("ipv6") or []),
+    }
+
+
 def dashboard(conn: sqlite3.Connection, settings: Settings) -> dict:
     latest = db.latest_snapshot(conn)
     latest_ok = db.latest_snapshot(conn, only_successful=True)
@@ -69,6 +142,7 @@ def dashboard(conn: sqlite3.Connection, settings: Settings) -> dict:
         "counts": counts,
         "conflicts": [record for record in dns_records if record.status == "conflict"],
         "http_open_ips": db.load_http_open_ips(conn),
+        "mwan3": mwan3_view(db.latest_mwan3(conn)),
         "settings": settings,
     }
 

@@ -112,6 +112,17 @@ def test_client_login_and_lease_call(monkeypatch) -> None:
     assert client.endpoint == "http://192.0.2.3/ubus"
 
 
+def test_client_mwan3_status(monkeypatch) -> None:
+    client = _client(
+        monkeypatch,
+        [
+            FakeResponse(LOGIN_OK),
+            FakeResponse({"jsonrpc": "2.0", "id": 1, "result": [0, {"interfaces": {}}]}),
+        ],
+    )
+    assert client.get_mwan3_status() == {"interfaces": {}}
+
+
 def test_client_retries_after_session_expired(monkeypatch) -> None:
     client = _client(
         monkeypatch,

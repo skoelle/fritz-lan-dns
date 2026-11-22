@@ -7,7 +7,7 @@ from fritz_lan_dns.fritz.hosts import parse_host_entries
 from fritz_lan_dns.fritz.mesh import parse_mesh
 from fritz_lan_dns.merge import merge_hosts
 from fritz_lan_dns.models import HostRecord
-from fritz_lan_dns.util import device_description
+from fritz_lan_dns.util import device_description, format_duration
 
 FIXTURE = Path(__file__).parent / "fixtures" / "mesh.json"
 
@@ -102,6 +102,17 @@ def test_merge_extra_openwrt_uses_base_name_description() -> None:
     )
     nas = next(host for host in hosts if host.hostname == "nas.lan")
     assert nas.description == "NAS"
+
+
+def test_format_duration() -> None:
+    assert format_duration(None) == "-"
+    assert format_duration("") == "-"
+    assert format_duration(0) == "0m"
+    assert format_duration(59) == "0m"
+    assert format_duration(60) == "1m"
+    assert format_duration(3600) == "1h 0m"
+    assert format_duration(3660) == "1h 1m"
+    assert format_duration(90000) == "1d 1h"
 
 
 def test_device_description_lookup() -> None:

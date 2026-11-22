@@ -60,6 +60,25 @@ def source_filter_values(source: str | None) -> tuple[str, ...]:
     return SOURCE_FILTER_GROUPS.get(value, (value,) if value else ())
 
 
+def format_duration(value: object) -> str:
+    if value is None or value == "":
+        return "-"
+    try:
+        total = int(float(str(value)))
+    except (TypeError, ValueError):
+        return "-"
+    if total <= 0:
+        return "0m"
+    days, remainder = divmod(total, 86400)
+    hours, remainder = divmod(remainder, 3600)
+    minutes = remainder // 60
+    if days:
+        return f"{days}d {hours}h"
+    if hours:
+        return f"{hours}h {minutes}m"
+    return f"{minutes}m"
+
+
 def device_description(
     hostname: str | None, descriptions: dict[str, str]
 ) -> str:

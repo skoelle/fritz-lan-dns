@@ -12,7 +12,7 @@ from .dns import build_dns_records, ensure_dns_files, write_dns_files
 from .fritz import FritzClient, load_mesh_json, parse_host_entries, parse_mesh
 from .merge import merge_hosts
 from .models import HostRecord
-from .openwrt import OpenWrtClient, parse_openwrt_hosts
+from .openwrt import OpenWrtClient, OpenWrtNotFound, parse_openwrt_hosts
 from .portscan import scan_ports
 from .util import iso_now, load_device_names
 
@@ -27,9 +27,9 @@ def _write_raw(settings: Settings, kind: str, content: str) -> Path:
     return path
 
 
-def _fetch_openwrt_hosts(settings: Settings) -> tuple[list[HostRecord], str | None]:
+def _openwrt_client(settings: Settings) -> tuple[OpenWrtClient | None, str | None]:
     if not settings.openwrt_enabled:
-        return [], None
+        return None, None
     missing = [
         name
         for name, value in (
@@ -40,7 +40,7 @@ def _fetch_openwrt_hosts(settings: Settings) -> tuple[list[HostRecord], str | No
         if not value
     ]
     if missing:
-        return [], "OpenWrt-Konfiguration unvollständig: " + ", ".join(missing)
+        return None, "OpenWrt-Konfiguration unvollständig: " + ", ".join(missing)
     try:
         client = OpenWrtClient(
             settings.openwrt_url,
@@ -49,6 +49,16 @@ def _fetch_openwrt_hosts(settings: Settings) -> tuple[list[HostRecord], str | No
             timeout=settings.openwrt_timeout,
             verify_tls=settings.openwrt_verify_tls,
         )
+    except Exception as exc:  # noqa: BLE001 - optionaler Abruf darf Fetch nicht stoppen
+        LOGGER.warning("OpenWrt-Client konnte nicht erstellt werden: %s", exc)
+        return None, f"OpenWrt-Abruf fehlgeschlagen: {exc}"
+    return client, None
+
+
+def _fetch_openwrt_hosts(
+    settings: Settings, client: OpenWrtClient
+) -> tuple[list[HostRecord], str | None]:
+    try:
         leases = client.get_dhcp_leases()
         hints = client.get_host_hints()
         _write_raw(settings, "openwrt-leases", json.dumps(leases, ensure_ascii=False))
@@ -60,6 +70,25 @@ def _fetch_openwrt_hosts(settings: Settings) -> tuple[list[HostRecord], str | No
     except Exception as exc:  # noqa: BLE001 - optionaler Abruf darf Fetch nicht stoppen
         LOGGER.warning("OpenWrt-Abruf fehlgeschlagen: %s", exc)
         return [], f"OpenWrt-Abruf fehlgeschlagen: {exc}"
+
+
+def _fetch_openwrt_mwan3(
+    settings: Settings, client: OpenWrtClient
+) -> tuple[dict | None, str | None]:
+    if not settings.openwrt_mwan3_enabled:
+        return None, None
+    try:
+        data = client.get_mwan3_status()
+    except OpenWrtNotFound as exc:
+        LOGGER.info("MWAN3 nicht verfügbar: %s", exc)
+        return None, None
+    except Exception as exc:  # noqa: BLE001 - optionaler Abruf darf Fetch nicht stoppen
+        LOGGER.warning("MWAN3-Abruf fehlgeschlagen: %s", exc)
+        return None, f"MWAN3-Abruf fehlgeschlagen: {exc}"
+    if not isinstance(data, dict):
+        return None, "MWAN3-Abruf lieferte keine Daten"
+    _write_raw(settings, "mwan3", json.dumps(data, ensure_ascii=False))
+    return data, None
 
 
 def prune_raw_files(settings: Settings) -> int:
@@ -114,8 +143,19 @@ def run_fetch(settings: Settings, legacy_json: Path | None = None) -> dict:
                     + "Hosts-API lieferte keine Einträge, nutze Mesh-Nodes"
                 )
 
-            extra_hosts, openwrt_error = _fetch_openwrt_hosts(settings)
-            if openwrt_error:
+            extra_hosts: list[HostRecord] = []
+            mwan3: dict | None = None
+            openwrt_client, openwrt_error = _openwrt_client(settings)
+            if openwrt_client is not None:
+                extra_hosts, openwrt_error = _fetch_openwrt_hosts(
+                    settings, openwrt_client
+                )
+                if openwrt_error:
+                    warning = (warning + "; " if warning else "") + openwrt_error
+                mwan3, mwan3_error = _fetch_openwrt_mwan3(settings, openwrt_client)
+                if mwan3_error:
+                    warning = (warning + "; " if warning else "") + mwan3_error
+            elif openwrt_error:
                 warning = (warning + "; " if warning else "") + openwrt_error
             hosts = merge_hosts(
                 host_entries, mesh.nodes, descriptions, extra_hosts=extra_hosts
@@ -158,6 +198,10 @@ def run_fetch(settings: Settings, legacy_json: Path | None = None) -> dict:
                 host_fetch.raw_xml,
                 warning,
             )
+            if mwan3 is not None:
+                db.store_snapshot_mwan3(
+                    conn, snapshot_id, json.dumps(mwan3, ensure_ascii=False)
+                )
 
             all_hosts = db.load_hosts(conn)
             static = db.load_dns_static(conn)
@@ -183,14 +227,16 @@ def run_fetch(settings: Settings, legacy_json: Path | None = None) -> dict:
             db.prune_hosts(conn, settings.host_retention_days)
             db.prune_http_status(conn, settings.host_retention_days)
             prune_raw_files(settings)
+            mwan3_interfaces = len(mwan3.get("interfaces") or {}) if mwan3 else 0
             LOGGER.info(
                 "Snapshot %s: %s Nodes (%s online), %s Hosts (%s OpenWrt), "
-                "%s DNS-Records, %s HTTP-Ports",
+                "%s MWAN3-Interfaces, %s DNS-Records, %s HTTP-Ports",
                 snapshot_id,
                 len(mesh.nodes),
                 sum(1 for node in mesh.nodes if node.online),
                 len(hosts),
                 len(extra_hosts),
+                mwan3_interfaces,
                 dns_summary["records"],
                 http_open_count,
             )
@@ -200,6 +246,7 @@ def run_fetch(settings: Settings, legacy_json: Path | None = None) -> dict:
                 "online": sum(1 for node in mesh.nodes if node.online),
                 "hosts": len(hosts),
                 "openwrt_hosts": len(extra_hosts),
+                "mwan3_interfaces": mwan3_interfaces,
                 "dns_records": dns_summary["records"],
                 "dns_conflicts": dns_summary["conflicts"],
                 "http_open": http_open_count,

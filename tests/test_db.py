@@ -407,6 +407,74 @@ def test_topology_openwrt_disabled_by_default(tmp_path: Path) -> None:
     assert all(row["source"] != "openwrt" for row in result["rows"])
 
 
+def test_latest_mwan3_roundtrip_and_view(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    db.init_schema(settings.db_path)
+    payload = {
+        "interfaces": {
+            "wan": {
+                "status": "online",
+                "enabled": True,
+                "running": True,
+                "online": 3600,
+                "uptime": 7200,
+                "score": 10,
+                "lost": 0,
+                "track_ip": [{"ip": "1.1.1.1", "status": "up"}],
+            }
+        },
+        "policies": {"ipv4": {"default": [{"interface": "wan", "percent": 100}]}},
+        "connected": {"ipv4": ["192.0.2.0/24"], "ipv6": []},
+    }
+    with db.connect(settings.db_path) as conn:
+        snapshot_id = db.start_snapshot(conn, "2026-11-22T20:00:00+00:00")
+        db.store_snapshot_mwan3(conn, snapshot_id, json.dumps(payload))
+
+        entry = db.latest_mwan3(conn)
+        assert entry is not None
+        assert entry["started_at"] == "2026-11-22T20:00:00+00:00"
+        assert entry["data"] == payload
+
+        view = web_data.mwan3_view(entry)
+        assert view is not None
+        assert view["interfaces"][0]["name"] == "wan"
+        assert view["interfaces"][0]["status_class"] == "ok"
+        assert view["interfaces"][0]["online"] == "1h 0m"
+        assert view["interfaces"][0]["track_up"] == 1
+        assert view["policies"][0]["members"][0]["interface"] == "wan"
+        assert view["connected_v4"] == 1
+
+
+def test_mwan3_view_returns_none_without_data() -> None:
+    assert web_data.mwan3_view(None) is None
+    assert web_data.mwan3_view({"started_at": "x", "data": {}}) is not None
+
+
+def test_init_schema_migrates_mwan3_json(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    settings.db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(settings.db_path)
+    conn.execute(
+        """
+        CREATE TABLE snapshots (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            started_at TEXT NOT NULL,
+            status TEXT NOT NULL
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    db.init_schema(settings.db_path)
+
+    with db.connect(settings.db_path) as conn:
+        columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(snapshots)")
+        }
+    assert "mwan3_json" in columns
+
+
 def test_topology_groups_direct_devices_then_slaves_by_ip(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     db.init_schema(settings.db_path)

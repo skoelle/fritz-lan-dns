@@ -5,6 +5,7 @@ from pathlib import Path
 from fritz_lan_dns import db
 from fritz_lan_dns.fetch import run_fetch
 from fritz_lan_dns.fritz.client import HostFetch
+from fritz_lan_dns.openwrt import OpenWrtNotFound
 from tests.helpers import make_settings
 
 FIXTURE = Path(__file__).parent / "fixtures" / "mesh.json"
@@ -77,6 +78,19 @@ class FakeOpenWrt:
             }
         }
 
+    def get_mwan3_status(self) -> dict:
+        return {
+            "interfaces": {
+                "wan": {"status": "online", "enabled": True, "running": True, "online": 3600, "uptime": 7200, "score": 10, "lost": 0, "track_ip": []},
+                "wwan": {"status": "offline", "enabled": True, "running": False, "online": 0, "uptime": 0, "score": 0, "lost": 2, "track_ip": []},
+            },
+            "policies": {
+                "ipv4": {"default": [{"interface": "wan", "percent": 100}]},
+                "ipv6": {"default": []},
+            },
+            "connected": {"ipv4": ["192.0.2.0/24"], "ipv6": []},
+        }
+
 
 def _openwrt_settings(tmp_path: Path):
     return make_settings(
@@ -124,6 +138,50 @@ def test_run_fetch_includes_openwrt_hosts(tmp_path: Path, monkeypatch) -> None:
         records = {record.hostname: record for record in db.load_dns_records(conn)}
         assert records["owrt-nas"].source == "openwrt"
         assert records["owrt-printer"].status == "stale"
+
+        assert result["mwan3_interfaces"] == 2
+        mwan3 = db.latest_mwan3(conn)
+        assert mwan3 is not None
+        assert mwan3["started_at"]
+        assert set(mwan3["data"]["interfaces"]) == {"wan", "wwan"}
+
+
+def test_run_fetch_mwan3_not_available_is_ignored(tmp_path: Path, monkeypatch) -> None:
+    settings = _openwrt_settings(tmp_path)
+    monkeypatch.setattr("fritz_lan_dns.fetch.FritzClient", FakeClient)
+
+    class NoMwan3OpenWrt(FakeOpenWrt):
+        def get_mwan3_status(self) -> dict:
+            raise OpenWrtNotFound("mwan3 nicht installiert")
+
+    monkeypatch.setattr("fritz_lan_dns.fetch.OpenWrtClient", NoMwan3OpenWrt)
+
+    result = run_fetch(settings)
+
+    assert result["mwan3_interfaces"] == 0
+    assert result["warning"] is None
+    with db.connect(settings.db_path) as conn:
+        assert db.latest_mwan3(conn) is None
+
+
+def test_run_fetch_mwan3_failure_is_warning(tmp_path: Path, monkeypatch) -> None:
+    settings = _openwrt_settings(tmp_path)
+    monkeypatch.setattr("fritz_lan_dns.fetch.FritzClient", FakeClient)
+
+    class FailingMwan3OpenWrt(FakeOpenWrt):
+        def get_mwan3_status(self) -> dict:
+            raise RuntimeError("mwan3 kaputt")
+
+    monkeypatch.setattr("fritz_lan_dns.fetch.OpenWrtClient", FailingMwan3OpenWrt)
+
+    result = run_fetch(settings)
+
+    assert result["mwan3_interfaces"] == 0
+    assert "MWAN3" in (result["warning"] or "")
+    with db.connect(settings.db_path) as conn:
+        latest = db.latest_snapshot(conn)
+        assert latest is not None
+        assert latest["status"] == "ok"
 
 
 def test_run_fetch_openwrt_failure_is_warning(tmp_path: Path, monkeypatch) -> None:

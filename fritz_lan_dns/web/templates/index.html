@@ -38,6 +38,38 @@
     <div class="box stat-box"><div class="box-title">HTTP :80</div><div class="stat-value">{{ counts.http_open }}</div><div class="stat-label">offene Webports</div></div>
 </div>
 
+{% if mwan3 %}
+<div class="box">
+    <div class="box-title">🌐 MultiWAN (OpenWrt)</div>
+    {% if mwan3.started_at %}<p class="hint">Stand: {{ mwan3.started_at }}</p>{% endif %}
+    <table>
+        <thead><tr><th>Interface</th><th>Status</th><th>Tracking</th><th>Online</th><th>Uptime</th><th>Score/Lost</th><th>Track-Ziele</th></tr></thead>
+        <tbody>
+        {% for iface in mwan3.interfaces %}
+        <tr>
+            <td><strong>{{ iface.name }}</strong></td>
+            <td><span class="badge {{ iface.status_class }}">{{ iface.status }}</span></td>
+            <td>{{ iface.tracking }}</td>
+            <td>{{ iface.online }}</td>
+            <td>{{ iface.uptime }}</td>
+            <td>{{ iface.score if iface.score is not none else "-" }} / {{ iface.lost if iface.lost is not none else "-" }}</td>
+            <td>{{ iface.track_up }}/{{ iface.track_total }}{% if iface.track_skipped %} ({{ iface.track_skipped }} skipped){% endif %}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% if mwan3.policies %}
+    <p class="hint">
+        Policies:
+        {% for policy in mwan3.policies %}{{ policy.family }} {{ policy.name }} = {% if policy.members %}{% for member in policy.members %}{{ member.interface }} {{ member.percent }}%{% if not loop.last %} + {% endif %}{% endfor %}{% else %}–{% endif %}{% if not loop.last %} · {% endif %}{% endfor %}
+    </p>
+    {% endif %}
+    {% if mwan3.connected_v4 or mwan3.connected_v6 %}
+    <p class="hint">Verbunden: {{ mwan3.connected_v4 }} IPv4 / {{ mwan3.connected_v6 }} IPv6 Netze</p>
+    {% endif %}
+</div>
+{% endif %}
+
 <div class="box">
     <div class="box-title">Letzter Lauf</div>
     {% if latest %}

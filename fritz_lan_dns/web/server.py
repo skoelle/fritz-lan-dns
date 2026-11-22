@@ -94,7 +94,15 @@ def api_status() -> JSONResponse:
     with _conn() as conn:
         latest = db.latest_snapshot(conn)
         counts = db.counts(conn)
-    return JSONResponse({"scheduler": scheduler.status(), "latest": latest, "counts": counts})
+        mwan3 = web_data.mwan3_view(db.latest_mwan3(conn))
+    return JSONResponse(
+        {
+            "scheduler": scheduler.status(),
+            "latest": latest,
+            "counts": counts,
+            "mwan3": mwan3,
+        }
+    )
 
 
 @app.post("/api/refresh")

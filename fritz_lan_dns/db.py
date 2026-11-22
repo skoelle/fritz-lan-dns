@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
@@ -24,7 +25,8 @@ CREATE TABLE IF NOT EXISTS snapshots (
     online_count INTEGER NOT NULL DEFAULT 0,
     host_count INTEGER NOT NULL DEFAULT 0,
     dns_count INTEGER NOT NULL DEFAULT 0,
-    zone_serial INTEGER
+    zone_serial INTEGER,
+    mwan3_json TEXT
 );
 
 CREATE TABLE IF NOT EXISTS mesh_nodes (
@@ -134,10 +136,17 @@ def connect(path: Path) -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
+def _ensure_column(
+    conn: sqlite3.Connection, table: str, column: str, definition: str
+) -> None:
+    columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {definition}")
+
+
 def _migrate_schema(conn: sqlite3.Connection) -> None:
-    columns = {row["name"] for row in conn.execute("PRAGMA table_info(dns_records)")}
-    if "source" not in columns:
-        conn.execute("ALTER TABLE dns_records ADD COLUMN source TEXT")
+    _ensure_column(conn, "dns_records", "source", "source TEXT")
+    _ensure_column(conn, "snapshots", "mwan3_json", "mwan3_json TEXT")
 
 
 def init_schema(path: Path) -> None:
@@ -464,6 +473,35 @@ def record_http_scan(
 def load_http_open_ips(conn: sqlite3.Connection) -> set[str]:
     rows = conn.execute("SELECT ip FROM http_status WHERE open = 1").fetchall()
     return {row["ip"] for row in rows}
+
+
+def store_snapshot_mwan3(
+    conn: sqlite3.Connection, snapshot_id: int, content: str
+) -> None:
+    conn.execute(
+        "UPDATE snapshots SET mwan3_json = ? WHERE id = ?", (content, snapshot_id)
+    )
+    conn.commit()
+
+
+def latest_mwan3(conn: sqlite3.Connection) -> dict | None:
+    row = conn.execute(
+        """
+        SELECT started_at, mwan3_json
+        FROM snapshots
+        WHERE mwan3_json IS NOT NULL
+        ORDER BY id DESC LIMIT 1
+        """
+    ).fetchone()
+    if row is None or not row["mwan3_json"]:
+        return None
+    try:
+        data = json.loads(row["mwan3_json"])
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    return {"started_at": row["started_at"], "data": data}
 
 
 def load_dns_static(conn: sqlite3.Connection) -> list[dict]:

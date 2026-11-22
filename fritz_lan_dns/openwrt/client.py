@@ -156,3 +156,6 @@ class OpenWrtClient:
 
     def get_host_hints(self) -> dict[str, Any]:
         return self._call_first("getHostHints")
+
+    def get_mwan3_status(self) -> dict[str, Any]:
+        return self.call("mwan3", "status", {})

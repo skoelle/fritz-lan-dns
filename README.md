@@ -95,6 +95,7 @@ OPENWRT_PASSWORD=openwrt-password
 OPENWRT_TIMEOUT=25
 OPENWRT_VERIFY_TLS=0
 OPENWRT_TOPOLOGY_PARENT_IP=192.0.2.1
+OPENWRT_MWAN3_ENABLED=1
 ```
 
 `DNS_FALLBACK_MODE=fritz.box` (Default) fragt bei einem MISS
@@ -335,6 +336,13 @@ gesehen, bleiben beide als getrennte Host-Zeilen erhalten (Quelle `FritzBox`
 bzw. `OpenWrt`). Im DNS werden dann für denselben Hostnamen mehrere A-Records
 geschrieben. Echte Namenskollisionen verschiedener Geräte (unterschiedliche
 MACs) bleiben weiterhin Konflikte.
+
+Ist `mwan3` auf dem OpenWrt-Router installiert (LuCI-App), wird mit
+`OPENWRT_MWAN3_ENABLED=1` zusätzlich der MultiWAN-Status pro Snapshot
+gespeichert und im Dashboard als Karte angezeigt: Interface-Status, Online-/
+Uptime-Zeiten, Tracking-Score und die Policies mit Traffic-Anteilen. Fehlt das
+`mwan3`-ubus-Objekt, wird der Abruf still übersprungen; bei anderen Fehlern
+bleibt der letzte bekannte Stand sichtbar.
 
 Für den Dauerbetrieb empfiehlt sich ein Read-only-User statt `root`. Auf dem
 Router per SSH:
