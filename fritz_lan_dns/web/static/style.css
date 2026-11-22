@@ -229,6 +229,45 @@ button:disabled { opacity: 0.6; cursor: wait; }
 .utilization.high, .signal.bad { color: var(--red); }
 .utilization.unknown, .signal.unknown { color: var(--muted); }
 
+.wlan-dashboard-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.75rem;
+}
+.wlan-card-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.75rem;
+}
+.wlan-card {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem;
+    background: #fafcff;
+}
+.wlan-card-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+.wlan-card-name { font-weight: 700; color: #222; overflow-wrap: anywhere; }
+.wlan-online { color: var(--muted); font-size: 0.75rem; white-space: nowrap; }
+.wlan-band-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    padding: 0.2rem 0;
+    font-size: 0.85rem;
+}
+.wlan-channel { color: #333; }
+.wlan-band-row .utilization { margin-left: auto; }
+
 .wlan-device-head {
     display: flex;
     justify-content: space-between;
@@ -250,5 +289,10 @@ button:disabled { opacity: 0.6; cursor: wait; }
 
 @media (max-width: 760px) {
     .stat-grid { grid-template-columns: repeat(2, 1fr); }
+    .wlan-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .header { align-items: flex-start; }
+}
+
+@media (max-width: 520px) {
+    .wlan-card-grid { grid-template-columns: 1fr; }
 }

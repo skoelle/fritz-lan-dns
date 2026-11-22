@@ -40,33 +40,30 @@
 
 {% if wlan %}
 <div class="box">
-    <div class="box-title">📶 WLAN</div>
-    <p class="hint">
-        {% if wlan.started_at %}Stand: {{ wlan.started_at }} · {% endif %}
-        {{ wlan.summary.ap_radios }} AP-Radios · {{ wlan.summary.clients }} WLAN-Clients ·
-        <a href="/wlan">Details</a>
-    </p>
-    <table>
-        <thead><tr><th>Gerät</th><th>Band</th><th>Kanal</th><th>Breite</th><th>Auslastung</th><th>SSID</th><th>Clients</th></tr></thead>
-        <tbody>
-        {% for device in wlan.devices %}
-        {% for iface in device.interfaces %}
-        <tr>
-            <td>
-                <strong>{{ device.name }}</strong>
-                {% if iface.is_guest %}<span class="badge">Gast</span>{% endif %}
-            </td>
-            <td><span class="chip {{ iface.band_class }}">{{ iface.band or "-" }}</span></td>
-            <td>{{ iface.channel or "-" }}</td>
-            <td>{{ iface.channel_width or "-" }}</td>
-            <td><span class="utilization {{ iface.utilization_class }}">{{ iface.utilization_label }}</span></td>
-            <td>{{ iface.ssid or "-" }}</td>
-            <td>{{ iface.client_count }}</td>
-        </tr>
-        {% endfor %}
-        {% endfor %}
-        </tbody>
-    </table>
+    <div class="wlan-dashboard-head">
+        <div class="box-title">📶 WLAN</div>
+        <a class="reset-link" href="/wlan">Details</a>
+    </div>
+    <div class="wlan-card-grid">
+    {% for device in wlan.devices if device.source in ['mesh', 'fritz'] %}
+        {% set radios = device.interfaces | rejectattr('is_guest') | list %}
+        {% if radios %}
+        <div class="wlan-card">
+            <div class="wlan-card-head">
+                <span class="wlan-card-name">{{ device.name }}</span>
+                <span class="wlan-online">{{ device.online_label }}</span>
+            </div>
+            {% for iface in radios %}
+            <div class="wlan-band-row">
+                <span class="chip {{ iface.band_class }}">{{ iface.band or "-" }}</span>
+                <span class="wlan-channel">Kanal {{ iface.channel or "-" }}</span>
+                <span class="utilization {{ iface.utilization_class }}">{{ iface.utilization_label }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    {% endfor %}
+    </div>
 </div>
 {% endif %}
 
