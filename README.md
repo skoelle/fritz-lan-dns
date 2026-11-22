@@ -12,7 +12,7 @@ Client -> Pi-hole (<pve-ip>:53)
             └── server=/<dns-domain>/<pve-ip>#53
                   └── CoreDNS (<pve-ip>:53)
                         ├── bekannte Hosts aus dns/hosts
-                        └── bei MISS: foo.<dns-domain> -> foo. -> FRITZ!Box
+                        └── bei MISS: foo.<dns-domain> -> foo.fritz.box. -> FRITZ!Box
 ```
 
 CoreDNS beantwortet ausschließlich `<dns-domain>`. Anfragen für andere Namen
@@ -29,8 +29,9 @@ Owner-Namen `foo.<dns-domain>.` zurückgeschrieben.
 - Webinterface für Dashboard, Topologie, Hosts, DNS und Historie
 - DNS-Records aus Hostnamen und IPs, inkl. Konflikt-Erkennung und Quellenangabe
 - `dns/hosts` für CoreDNS, `dns/<dns-domain>.zone` als Export
-- MISS-Fallback: unbekannte `foo.<dns-domain>` werden als `foo.` an die
-  FRITZ!Box gefragt; Antworten werden auf `foo.<dns-domain>.` zurückgeschrieben
+- MISS-Fallback: unbekannte `foo.<dns-domain>` werden als `foo.fritz.box.` an
+  die FRITZ!Box gefragt (Default; `bare` ist konfigurierbar); Antworten werden
+  auf `foo.<dns-domain>.` zurückgeschrieben
 - Miss-Logging: jede Anfrage an Stufe 2 landet mit Name, Typ und RCODE auf stdout
 - Manueller Refresh im Webinterface
 - Keine externen JS-/CSS-Abhängigkeiten
@@ -77,7 +78,7 @@ DNS_HOST_RETENTION_DAYS=90
 
 # MISS-Fallback direkt zur FRITZ!Box
 DNS_FALLBACK_ENABLED=1
-DNS_FALLBACK_MODE=bare
+DNS_FALLBACK_MODE=fritz.box
 DNS_FALLBACK_UPSTREAM=192.0.2.1:53
 
 # Optional: A-Record für ns1.<dns-domain>
@@ -95,9 +96,10 @@ OPENWRT_TIMEOUT=25
 OPENWRT_VERIFY_TLS=0
 ```
 
-`DNS_FALLBACK_MODE=bare` fragt bei einem MISS den nackten Hostnamen `foo` bei
-der FRITZ!Box an. `DNS_FALLBACK_MODE=fritz.box` würde stattdessen
-`foo.fritz.box` fragen.
+`DNS_FALLBACK_MODE=fritz.box` (Default) fragt bei einem MISS
+`foo.fritz.box.` bei der FRITZ!Box an. `DNS_FALLBACK_MODE=bare` fragt
+stattdessen den nackten Namen `foo.`; dabei leakt die FRITZ!Box unbekannte
+Single-Label-Namen an ihren externen Upstream (siehe „Privacy notes“).
 
 Nach jedem Abruf werden die aktiven Hosts zusätzlich auf einen offenen
 TCP-Port 80 geprüft (`HTTP_SCAN_ENABLED`). Der Status wird pro IP gespeichert
@@ -212,23 +214,23 @@ CoreDNS beantwortet zuerst alle bekannten Records aus `dns/hosts`. Bei einem
 MISS innerhalb der lokalen Domain greift der zweite Server-Block:
 
 ```text
-foo.<dns-domain> -> rewrite -> foo. -> FRITZ!Box <fritzbox-ip>:53
+foo.<dns-domain> -> rewrite -> foo.fritz.box. -> FRITZ!Box <fritzbox-ip>:53
 ```
 
 Die Antwort wird per `answer name` wieder auf den ursprünglichen Owner-Namen
 `foo.<dns-domain>.` zurückgeschrieben. Ohne diese Rückumschreibung würde die
-Antwort `foo.` als Owner tragen; viele Resolver (u. a. dnsmasq in Pi-hole)
-verwerfen eine solche Abweichung zwischen Frage und Antwort.
+Antwort `foo.fritz.box.` als Owner tragen; viele Resolver (u. a. dnsmasq in
+Pi-hole) verwerfen eine solche Abweichung zwischen Frage und Antwort.
 
-Voraussetzung ist, dass die FRITZ!Box nackte Hostnamen per DNS beantwortet:
+Der Default `DNS_FALLBACK_MODE=fritz.box` nutzt die lokale `fritz.box`-Zone der
+FRITZ!Box. Unbekannte Namen werden dort lokal mit NXDOMAIN beantwortet und
+nicht an den externen Upstream weitergeleitet; live bekannte LAN-Hosts werden
+weiterhin aufgelöst.
 
-```bash
-dig @<fritzbox-ip> foo
-```
-
-Wenn das nicht funktioniert, kann `DNS_FALLBACK_MODE=fritz.box` verwendet
-werden. Dann fragt CoreDNS `foo.fritz.box.` und schreibt die Antwort ebenfalls
-auf `foo.<dns-domain>.` zurück.
+`DNS_FALLBACK_MODE=bare` fragt stattdessen den nackten Namen `foo.`. Das
+funktioniert nur, wenn die FRITZ!Box nackte Hostnamen per DNS beantwortet, und
+leakt unbekannte Single-Label-Namen an den externen Upstream (siehe
+„Privacy notes“).
 
 Bekannte Hosts aus `dns/hosts` beantworten nur die Typen, die dort stehen
 (A und optional AAAA). Bei einem bekannten Host mit nur einem A-Record liefert
@@ -263,27 +265,32 @@ will, kann stattdessen einen Logging-Driver (z. B. Loki, Fluentd) konfigurieren.
 
 ## Privacy notes
 
-Unbekannte Namen werden in Stufe 2 als nackte Single-Label-Namen (`foo.`) an die
-FRITZ!Box geschickt. Ob die FRITZ!Box solche Namen an ihren externen Upstream
-weiterreicht, ist nicht pauschal garantiert und muss pro Installation geprüft
-werden.
+Der nackte Fallback (`DNS_FALLBACK_MODE=bare`) schickt unbekannte Namen als
+Single-Label-Namen (`foo.`) an die FRITZ!Box. Das wurde gegen die echte
+FRITZ!Box geprüft: Ein Fantasiename wurde bis zu den Root-Servern
+weitergeleitet (Antwort mit Root-SOA `a.root-servers.net`). In dieser
+Konfiguration leckt der Name also nach außen.
 
-Test (auf dem Docker-Host ausführen, nicht aus dieser Dev-VM):
+Der Default `DNS_FALLBACK_MODE=fritz.box` vermeidet das: Die FRITZ!Box
+beantwortet `foo.fritz.box.` aus ihrer lokalen Zone. Ein unbekannter Name
+liefert NXDOMAIN mit der lokalen SOA `fritz.box.`; es geht nichts upstream.
+Gleichzeitig löst dieser Modus live bekannte LAN-Hosts weiterhin auf und
+vermeidet ein DNSSEC-SERVFAIL, das Pi-hole im nackten Modus für
+`<dns-domain>`-NXDOMAINs lieferte.
+
+Nachprüfen lässt sich das auf dem Docker-Host mit:
 
 ```bash
 dig @<docker-host> zzz-leaktest-12345.<dns-domain>
-sudo tcpdump -ni any port 53 and not host 127.0.0.1
+dig @<fritzbox-ip> zzz-leaktest-12345.fritz.box
 ```
 
-Zusätzlich im Pi-hole-Log bzw. auf dem Upstream der FRITZ!Box prüfen, ob
-`zzz-leaktest-12345` dort ankommt.
+Im ersten Fall muss die AUTHORITY-Section die lokale SOA `fritz.box.` zeigen
+(kein Root-SOA `a.root-servers.net`). Zusätzlich im Pi-hole-Log bzw. auf dem
+Upstream der FRITZ!Box prüfen, ob `zzz-leaktest-12345` dort ankommt.
 
-Status: **unverifiziert**. Dieser Test benötigt Zugriff auf das echte LAN und
-die FRITZ!Box und wurde im Rahmen der Umstellung nicht ausgeführt. Falls sich
-ein Leck zeigt, wäre ein Allowlist-Schutz möglich (Stufe 2 nur für bereits
-bekannte Namen aus dem letzten Sync). Das würde allerdings die Live-Erkennung
-neuer, noch nicht gecachter Hosts abschalten und ist daher eine bewusste
-Abwägung.
+Status: **fritz.box-Modus verifiziert (kein Leak)**. Der frühere `bare`-Modus
+hat nachweislich geleakt und ist daher nicht zu empfehlen.
 
 ## OpenWrt (optional)
 

@@ -44,7 +44,7 @@ def test_build_settings_has_no_private_defaults(tmp_path, monkeypatch) -> None:
         "BoxPW",
         "BOX_PW",
         "DNS_DOMAIN",
-        "DNS_PRIMARY_UPSTREAM",
+        "DNS_FALLBACK_MODE",
         "DNS_FALLBACK_UPSTREAM",
         "OPENWRT_ENABLED",
         "OPENWRT_URL",
@@ -57,6 +57,7 @@ def test_build_settings_has_no_private_defaults(tmp_path, monkeypatch) -> None:
     assert settings.box_user == ""
     assert settings.box_pw == ""
     assert settings.dns_domain == ""
+    assert settings.dns_fallback_mode == "fritz.box"
     assert settings.dns_fallback_upstream == ""
     assert settings.openwrt_enabled is False
     assert settings.openwrt_url == ""

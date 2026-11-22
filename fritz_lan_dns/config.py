@@ -191,7 +191,7 @@ def build_settings(env_file: Path | None = None) -> Settings:
         dns_zone_ttl=_env_int("DNS_ZONE_TTL", 60),
         dns_include_ipv6=_env_bool("DNS_INCLUDE_IPV6", False),
         dns_fallback_enabled=_env_bool("DNS_FALLBACK_ENABLED", True),
-        dns_fallback_mode=(_env("DNS_FALLBACK_MODE") or "bare").lower(),
+        dns_fallback_mode=(_env("DNS_FALLBACK_MODE") or "fritz.box").lower(),
         dns_fallback_upstream=_env("DNS_FALLBACK_UPSTREAM")
         or (f"{box_ip}:53" if box_ip else ""),
         dns_ns_ip=_env("DNS_NS_IP") or "",
