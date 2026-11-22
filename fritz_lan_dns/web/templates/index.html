@@ -27,8 +27,14 @@
 <div class="stat-grid">
     <div class="box stat-box"><div class="box-title">Mesh-Nodes</div><div class="stat-value">{{ counts.nodes }}</div><div class="stat-label">{{ counts.online }} online</div></div>
     <div class="box stat-box"><div class="box-title">Hosts</div><div class="stat-value">{{ counts.hosts }}</div><div class="stat-label">{{ counts.active_hosts }} aktiv</div></div>
-    <div class="box stat-box"><div class="box-title">DNS-Records</div><div class="stat-value">{{ counts.dns_records }}</div><div class="stat-label">in hosts-Datei</div></div>
-    <div class="box stat-box"><div class="box-title">Konflikte</div><div class="stat-value">{{ counts.dns_conflicts }}</div><div class="stat-label">nicht geschrieben</div></div>
+    <div class="box stat-box">
+        <div class="box-title">DNS-Records</div>
+        <div class="stat-value">{{ counts.dns_records }}</div>
+        <div class="stat-label">in hosts-Datei</div>
+        {% if counts.dns_conflicts %}
+        <div class="stat-label stat-alert">⚠ {{ counts.dns_conflicts }} Konflikte – nicht geschrieben</div>
+        {% endif %}
+    </div>
     <div class="box stat-box"><div class="box-title">HTTP :80</div><div class="stat-value">{{ counts.http_open }}</div><div class="stat-label">offene Webports</div></div>
 </div>
 
