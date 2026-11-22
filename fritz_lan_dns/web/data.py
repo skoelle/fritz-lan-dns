@@ -64,10 +64,72 @@ _MWAN3_STATUS_CLASS = {
 }
 
 
+def _wifi_band(frequency: object) -> str:
+    try:
+        value = int(float(str(frequency)))
+    except (TypeError, ValueError):
+        return ""
+    if 2400 <= value < 3000:
+        return "2.4 GHz"
+    if 4900 <= value < 5925:
+        return "5 GHz"
+    if value >= 5925:
+        return "6 GHz"
+    return ""
+
+
+def _wifi_signal_class(signal: object) -> str:
+    try:
+        value = int(float(str(signal)))
+    except (TypeError, ValueError):
+        return "stale"
+    if value >= -60:
+        return "ok"
+    if value >= -72:
+        return "stale"
+    return "failed"
+
+
+def _wifi_view(info: dict | None) -> dict | None:
+    if not isinstance(info, dict):
+        return None
+    signal = info.get("signal")
+    noise = info.get("noise")
+    quality = info.get("quality")
+    quality_max = info.get("quality_max")
+    bitrate = info.get("bitrate")
+    try:
+        snr = int(signal) - int(noise)
+    except (TypeError, ValueError):
+        snr = None
+    try:
+        quality_pct = round(int(quality) * 100 / int(quality_max))
+    except (TypeError, ValueError, ZeroDivisionError):
+        quality_pct = None
+    try:
+        rate_mbit = round(int(bitrate) / 1000)
+    except (TypeError, ValueError):
+        rate_mbit = None
+    return {
+        "device": info.get("device"),
+        "mode": info.get("mode"),
+        "ssid": info.get("ssid"),
+        "signal": signal,
+        "noise": noise,
+        "snr": snr,
+        "quality_pct": quality_pct,
+        "signal_class": _wifi_signal_class(signal),
+        "rate_mbit": rate_mbit,
+        "band": _wifi_band(info.get("frequency")),
+        "channel": info.get("channel"),
+    }
+
+
 def mwan3_view(entry: dict | None) -> dict | None:
     if not entry:
         return None
     data = entry.get("data") or {}
+    wireless = data.get("wireless") or {}
     interfaces = []
     for name, item in (data.get("interfaces") or {}).items():
         if not isinstance(item, dict):
@@ -96,6 +158,7 @@ def mwan3_view(entry: dict | None) -> dict | None:
                 "track_up": up,
                 "track_skipped": skipped,
                 "track_total": len(tracks),
+                "wifi": _wifi_view(wireless.get(name)),
             }
         )
     interfaces.sort(key=lambda row: row["name"].lower())

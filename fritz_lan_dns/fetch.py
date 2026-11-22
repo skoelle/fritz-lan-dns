@@ -95,8 +95,52 @@ def _fetch_openwrt_mwan3(
         return None, f"MWAN3-Abruf fehlgeschlagen: {exc}"
     if not isinstance(data, dict):
         return None, "MWAN3-Abruf lieferte keine Daten"
-    _write_raw(settings, "mwan3", json.dumps(data, ensure_ascii=False))
     return data, None
+
+
+def _attach_wireless_info(client: OpenWrtClient, mwan3: dict) -> None:
+    try:
+        interfaces = client.get_network_interfaces().get("interface") or []
+    except Exception as exc:  # noqa: BLE001 - optionale Anreicherung
+        LOGGER.warning("Netzwerk-Interfaces konnten nicht gelesen werden: %s", exc)
+        return
+
+    devices: dict[str, str] = {}
+    for item in interfaces:
+        if not isinstance(item, dict) or not item.get("interface"):
+            continue
+        device = item.get("l3_device") or item.get("device")
+        if device:
+            devices[item["interface"]] = device
+
+    wireless: dict[str, dict] = {}
+    for ifname in (mwan3.get("interfaces") or {}):
+        device = devices.get(ifname)
+        if not device:
+            continue
+        try:
+            info = client.get_wireless_info(device)
+        except OpenWrtNotFound:
+            continue
+        except Exception as exc:  # noqa: BLE001 - optionale Anreicherung
+            LOGGER.warning("WLAN-Info für %s (%s) fehlgeschlagen: %s", ifname, device, exc)
+            continue
+        if not isinstance(info, dict) or info.get("signal") is None:
+            continue
+        wireless[ifname] = {
+            "device": device,
+            "mode": info.get("mode"),
+            "ssid": info.get("ssid"),
+            "signal": info.get("signal"),
+            "noise": info.get("noise"),
+            "quality": info.get("quality"),
+            "quality_max": info.get("quality_max"),
+            "bitrate": info.get("bitrate"),
+            "frequency": info.get("frequency"),
+            "channel": info.get("channel"),
+        }
+    if wireless:
+        mwan3["wireless"] = wireless
 
 
 def _parse_mesh_wlan(
@@ -223,6 +267,11 @@ def run_fetch(settings: Settings, legacy_json: Path | None = None) -> dict:
                 mwan3, mwan3_error = _fetch_openwrt_mwan3(settings, openwrt_client)
                 if mwan3_error:
                     warning = (warning + "; " if warning else "") + mwan3_error
+                if mwan3 is not None:
+                    _attach_wireless_info(openwrt_client, mwan3)
+                    _write_raw(
+                        settings, "mwan3", json.dumps(mwan3, ensure_ascii=False)
+                    )
             elif openwrt_error:
                 warning = (warning + "; " if warning else "") + openwrt_error
             hosts = merge_hosts(

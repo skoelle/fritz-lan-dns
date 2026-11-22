@@ -79,7 +79,21 @@
         <tbody>
         {% for iface in mwan3.interfaces %}
         <tr>
-            <td><strong>{{ iface.name }}</strong></td>
+            <td>
+                <strong>{{ iface.name }}</strong>
+                {% if iface.wifi %}
+                <div class="hint">📶 {{ iface.wifi.ssid or "-" }} · {{ iface.wifi.mode or "-" }} · {{ iface.wifi.device or "-" }}</div>
+                <div class="hint">
+                    <span class="badge {{ iface.wifi.signal_class }}">{{ iface.wifi.signal }} dBm</span>
+                    {% if iface.wifi.quality_pct is not none %} · {{ iface.wifi.quality_pct }}%{% endif %}
+                    {% if iface.wifi.snr is not none %} · SNR {{ iface.wifi.snr }} dB{% endif %}
+                    {% if iface.wifi.noise is not none %} · Noise {{ iface.wifi.noise }} dBm{% endif %}
+                    {% if iface.wifi.rate_mbit is not none %} · {{ iface.wifi.rate_mbit }} Mbit/s{% endif %}
+                    {% if iface.wifi.band %} · {{ iface.wifi.band }}{% endif %}
+                    {% if iface.wifi.channel %} Ch {{ iface.wifi.channel }}{% endif %}
+                </div>
+                {% endif %}
+            </td>
             <td><span class="badge {{ iface.status_class }}">{{ iface.status }}</span></td>
             <td>{{ iface.tracking }}</td>
             <td>{{ iface.online }}</td>

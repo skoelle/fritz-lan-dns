@@ -159,3 +159,9 @@ class OpenWrtClient:
 
     def get_mwan3_status(self) -> dict[str, Any]:
         return self.call("mwan3", "status", {})
+
+    def get_network_interfaces(self) -> dict[str, Any]:
+        return self.call("network.interface", "dump")
+
+    def get_wireless_info(self, device: str) -> dict[str, Any]:
+        return self.call("iwinfo", "info", {"device": device})

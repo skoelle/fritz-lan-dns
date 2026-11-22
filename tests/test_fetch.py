@@ -104,6 +104,30 @@ class FakeOpenWrt:
             }
         }
 
+    def get_network_interfaces(self) -> dict:
+        return {
+            "interface": [
+                {"interface": "wan", "device": "eth0", "l3_device": "eth0"},
+                {"interface": "wwan", "device": "phy1-sta0", "l3_device": "phy1-sta0"},
+            ]
+        }
+
+    def get_wireless_info(self, device: str) -> dict:
+        if device != "phy1-sta0":
+            raise OpenWrtNotFound("kein WLAN")
+        return {
+            "device": device,
+            "mode": "Client",
+            "ssid": "TestWLAN",
+            "signal": -42,
+            "noise": -92,
+            "quality": 68,
+            "quality_max": 70,
+            "bitrate": 360000,
+            "frequency": 5540,
+            "channel": 108,
+        }
+
     def get_mwan3_status(self) -> dict:
         return {
             "interfaces": {
@@ -170,6 +194,9 @@ def test_run_fetch_includes_openwrt_hosts(tmp_path: Path, monkeypatch) -> None:
         assert mwan3 is not None
         assert mwan3["started_at"]
         assert set(mwan3["data"]["interfaces"]) == {"wan", "wwan"}
+        assert mwan3["data"]["wireless"]["wwan"]["ssid"] == "TestWLAN"
+        assert mwan3["data"]["wireless"]["wwan"]["signal"] == -42
+        assert "wan" not in mwan3["data"]["wireless"]
 
 
 def test_run_fetch_mwan3_not_available_is_ignored(tmp_path: Path, monkeypatch) -> None:

@@ -123,6 +123,19 @@ def test_client_mwan3_status(monkeypatch) -> None:
     assert client.get_mwan3_status() == {"interfaces": {}}
 
 
+def test_client_network_and_wireless_calls(monkeypatch) -> None:
+    client = _client(
+        monkeypatch,
+        [
+            FakeResponse(LOGIN_OK),
+            FakeResponse({"jsonrpc": "2.0", "id": 1, "result": [0, {"interface": []}]}),
+            FakeResponse({"jsonrpc": "2.0", "id": 1, "result": [0, {"signal": -42}]}),
+        ],
+    )
+    assert client.get_network_interfaces() == {"interface": []}
+    assert client.get_wireless_info("phy1-sta0") == {"signal": -42}
+
+
 def test_client_retries_after_session_expired(monkeypatch) -> None:
     client = _client(
         monkeypatch,

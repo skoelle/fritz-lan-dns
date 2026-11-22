@@ -350,7 +350,9 @@ Ist `mwan3` auf dem OpenWrt-Router installiert (LuCI-App), wird mit
 gespeichert und im Dashboard als Karte angezeigt: Interface-Status, Online-/
 Uptime-Zeiten, Tracking-Score und die Policies mit Traffic-Anteilen. Fehlt das
 `mwan3`-ubus-Objekt, wird der Abruf still übersprungen; bei anderen Fehlern
-bleibt der letzte bekannte Stand sichtbar.
+bleibt der letzte bekannte Stand sichtbar. Drahtlose MWAN3-Interfaces (z.B.
+WWAN über WLAN) zeigen zusätzlich SSID, Signalstärke (dBm), Qualität, SNR,
+Rauschen, Link-Rate, Band und Kanal – jeweils zum Zeitpunkt des Snapshots.
 
 Für den Dauerbetrieb empfiehlt sich ein Read-only-User statt `root`. Auf dem
 Router per SSH:

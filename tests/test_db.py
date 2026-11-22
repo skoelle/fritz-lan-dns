@@ -452,6 +452,55 @@ def test_mwan3_view_returns_none_without_data() -> None:
     assert web_data.mwan3_view({"started_at": "x", "data": {}}) is not None
 
 
+def test_mwan3_view_formats_wireless() -> None:
+    entry = {
+        "started_at": "2026-11-22T20:00:00+00:00",
+        "data": {
+            "interfaces": {
+                "wwan": {
+                    "status": "online",
+                    "online": 3600,
+                    "uptime": 3600,
+                    "score": 10,
+                    "lost": 0,
+                    "track_ip": [],
+                }
+            },
+            "policies": {},
+            "connected": {},
+            "wireless": {
+                "wwan": {
+                    "device": "phy1-sta0",
+                    "mode": "Client",
+                    "ssid": "TestWLAN",
+                    "signal": -42,
+                    "noise": -92,
+                    "quality": 68,
+                    "quality_max": 70,
+                    "bitrate": 360000,
+                    "frequency": 5540,
+                    "channel": 108,
+                }
+            },
+        },
+    }
+
+    view = web_data.mwan3_view(entry)
+    wifi = view["interfaces"][0]["wifi"]
+    assert wifi["ssid"] == "TestWLAN"
+    assert wifi["mode"] == "Client"
+    assert wifi["device"] == "phy1-sta0"
+    assert wifi["signal"] == -42
+    assert wifi["snr"] == 50
+    assert wifi["quality_pct"] == 97
+    assert wifi["rate_mbit"] == 360
+    assert wifi["band"] == "5 GHz"
+    assert wifi["channel"] == 108
+    assert wifi["signal_class"] == "ok"
+    assert web_data._wifi_band(2437) == "2.4 GHz"
+    assert web_data._wifi_band(6115) == "6 GHz"
+
+
 def test_init_schema_migrates_mwan3_json(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     settings.db_path.parent.mkdir(parents=True, exist_ok=True)
