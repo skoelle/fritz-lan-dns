@@ -42,10 +42,12 @@ def test_build_records_active_stale_and_conflicts() -> None:
     )
     by_fqdn = {record.fqdn: record for record in records}
     assert by_fqdn["printer.example.test"].status == "active"
+    assert by_fqdn["printer.example.test"].source == "fritz"
     assert by_fqdn["old-tablet.example.test"].status == "stale"
     conflict = [record for record in records if record.status == "conflict"]
     assert len(conflict) == 1
     assert conflict[0].ip == "192.0.2.60"
+    assert conflict[0].source == "fritz"
     assert "192.0.2.60" in (conflict[0].conflict or "")
 
 
@@ -58,6 +60,18 @@ def test_static_record_wins() -> None:
     assert len(records) == 1
     assert records[0].ip == "192.0.2.99"
     assert records[0].status == "static"
+    assert records[0].source == "static"
+
+
+def test_openwrt_source_is_kept() -> None:
+    records = build_dns_records(
+        [_host("camera", "192.0.2.160", source="openwrt")],
+        [],
+        "example.test",
+    )
+    assert len(records) == 1
+    assert records[0].source == "openwrt"
+    assert records[0].status == "active"
 
 
 def test_ipv6_is_optional() -> None:

@@ -6,6 +6,7 @@ from pathlib import Path
 from fritz_lan_dns.fritz.hosts import parse_host_entries
 from fritz_lan_dns.fritz.mesh import parse_mesh
 from fritz_lan_dns.merge import merge_hosts
+from fritz_lan_dns.models import HostRecord
 
 FIXTURE = Path(__file__).parent / "fixtures" / "mesh.json"
 
@@ -53,6 +54,44 @@ def test_merge_fritz_and_mesh_hosts() -> None:
     assert by_name["client"].description == "Notebook"
     assert by_name["offline"].active is False
     assert len({host.key for host in hosts}) == len(hosts)
+
+
+def test_merge_extra_openwrt_hosts() -> None:
+    extra = [
+        HostRecord(
+            key="mac:aa:bb:cc:00:00:10",
+            hostname="owrt-nas",
+            ip="192.0.2.150",
+            mac="AA:BB:CC:00:00:10",
+            active=True,
+            source="openwrt",
+        )
+    ]
+    hosts = merge_hosts(parse_host_entries(_entries()), [], extra_hosts=extra)
+    by_name = {host.hostname: host for host in hosts}
+
+    assert by_name["owrt-nas"].source == "openwrt"
+    assert by_name["owrt-nas"].ip == "192.0.2.150"
+    assert by_name["router"].source == "fritz"
+    assert len({host.key for host in hosts}) == len(hosts)
+
+
+def test_merge_prefers_fritz_source_for_shared_mac() -> None:
+    extra = [
+        HostRecord(
+            key="mac:aa:bb:cc:00:00:01",
+            hostname="router-openwrt",
+            ip="192.0.2.200",
+            mac="AA:BB:CC:00:00:01",
+            active=True,
+            source="openwrt",
+        )
+    ]
+    hosts = merge_hosts(parse_host_entries(_entries()), [], extra_hosts=extra)
+    router = next(host for host in hosts if host.hostname == "router")
+
+    assert router.source == "fritz"
+    assert router.ip == "192.0.2.1"
 
 
 def test_merge_marks_mesh_node_online_even_if_host_entry_inactive() -> None:

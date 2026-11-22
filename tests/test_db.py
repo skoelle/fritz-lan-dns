@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sqlite3
 from pathlib import Path
 
 from fritz_lan_dns import db
@@ -158,6 +159,65 @@ def test_web_data_topology_hosts_and_dns(tmp_path: Path) -> None:
 
         dashboard = web_data.dashboard(conn, settings)
         assert dashboard["counts"]["nodes"] == len(mesh.nodes)
+
+
+def test_dns_source_roundtrip_and_filter(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    db.init_schema(settings.db_path)
+    openwrt_host = HostRecord(
+        key="mac:aa:bb:cc:99:00:01",
+        hostname="camera",
+        ip="192.0.2.160",
+        mac="aa:bb:cc:99:00:01",
+        active=True,
+        source="openwrt",
+        last_seen=iso_now(),
+    )
+    with db.connect(settings.db_path) as conn:
+        _store(conn, _mesh(), [_host("printer", "192.0.2.50"), openwrt_host])
+        records = build_dns_records(db.load_hosts(conn), [], settings.dns_domain)
+        db.replace_dns_records(conn, records)
+
+        by_name = {record.hostname: record for record in db.load_dns_records(conn)}
+        assert by_name["printer"].source == "fritz"
+        assert by_name["camera"].source == "openwrt"
+
+        rows = web_data.hosts(conn, source="openwrt")
+        assert len(rows) == 1
+        assert rows[0]["hostname"] == "camera"
+        assert rows[0]["source_label"] == "OpenWrt"
+
+
+def test_init_schema_migrates_dns_source(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    settings.db_path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(settings.db_path)
+    conn.execute(
+        """
+        CREATE TABLE dns_records (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            hostname TEXT NOT NULL,
+            fqdn TEXT NOT NULL,
+            ip TEXT NOT NULL,
+            mac TEXT,
+            status TEXT NOT NULL,
+            conflict TEXT,
+            last_seen TEXT,
+            updated_at TEXT NOT NULL,
+            UNIQUE(hostname, ip)
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+    db.init_schema(settings.db_path)
+
+    with db.connect(settings.db_path) as conn:
+        columns = {
+            row["name"] for row in conn.execute("PRAGMA table_info(dns_records)")
+        }
+    assert "source" in columns
 
 
 def test_topology_groups_direct_devices_then_slaves_by_ip(tmp_path: Path) -> None:

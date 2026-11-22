@@ -25,7 +25,7 @@
 <div class="box">
     <div class="box-title">DNS-Records</div>
     <table data-sortable>
-        <thead><tr><th>FQDN</th><th>IP</th><th>MAC</th><th>Status</th><th>Last Seen</th><th>Konflikt</th></tr></thead>
+        <thead><tr><th>FQDN</th><th>IP</th><th>MAC</th><th>Status</th><th>Quelle</th><th>Last Seen</th><th>Konflikt</th></tr></thead>
         <tbody>
         {% for record in records %}
         <tr class="{% if record.status == 'conflict' %}conflict{% endif %}">
@@ -33,11 +33,12 @@
             <td>{{ ip_link(record.ip, record.ip in http_open_ips) }}</td>
             <td><code>{{ record.mac or "-" }}</code></td>
             <td><span class="badge {{ record.status }}">{{ record.status }}</span></td>
+            <td>{% if record.source %}<span class="badge source-{{ record.source }}">{{ source_label(record.source) }}</span>{% else %}-{% endif %}</td>
             <td>{{ record.last_seen or "-" }}</td>
             <td>{{ record.conflict or "" }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="6">Noch keine Records.</td></tr>
+        <tr><td colspan="7">Noch keine Records.</td></tr>
         {% endfor %}
         </tbody>
     </table>

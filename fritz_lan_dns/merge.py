@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from .models import HostRecord, MeshNode
 
+_SOURCE_RANK = {"fritz": 3, "openwrt": 2, "mesh": 1}
+
 
 def _merge_into(target: HostRecord, source: HostRecord) -> None:
     if not target.hostname and source.hostname:
@@ -17,14 +19,15 @@ def _merge_into(target: HostRecord, source: HostRecord) -> None:
     if not target.last_seen and source.last_seen:
         target.last_seen = source.last_seen
     target.active = target.active or source.active
-    if source.source == "fritz":
-        target.source = "fritz"
+    if _SOURCE_RANK.get(source.source, 0) > _SOURCE_RANK.get(target.source, 0):
+        target.source = source.source
 
 
 def merge_hosts(
     host_entries: list[HostRecord],
     mesh_nodes: list[MeshNode],
     descriptions: dict[str, str] | None = None,
+    extra_hosts: list[HostRecord] | None = None,
 ) -> list[HostRecord]:
     descriptions = descriptions or {}
     records: list[HostRecord] = []
@@ -77,6 +80,9 @@ def merge_hosts(
                 description=node.description or descriptions.get(hostname.lower(), ""),
             )
         )
+
+    for record in extra_hosts or []:
+        add(record)
 
     records.sort(key=lambda record: (record.hostname.lower(), record.key))
     return records

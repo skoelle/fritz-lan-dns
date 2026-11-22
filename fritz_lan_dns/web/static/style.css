@@ -129,6 +129,10 @@ pre {
 .badge.ok, .badge.active, .badge.static { background: #e6f4ea; color: var(--green); }
 .badge.running, .badge.stale { background: #fff4d6; color: var(--yellow); }
 .badge.failed, .badge.conflict { background: #fde8e6; color: var(--red); }
+.badge.source-fritz { background: #e7f0fb; color: #1a4f8a; }
+.badge.source-openwrt { background: #fdeee0; color: #a04d00; }
+.badge.source-mesh { background: #eef0f2; color: #555; }
+.badge.source-static { background: #e6f4ea; color: var(--green); }
 
 .alert { padding: 0.85rem 1rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.9rem; }
 .alert.error { background: #fde8e6; color: var(--red); }

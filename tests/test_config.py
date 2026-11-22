@@ -44,7 +44,12 @@ def test_build_settings_has_no_private_defaults(tmp_path, monkeypatch) -> None:
         "BoxPW",
         "BOX_PW",
         "DNS_DOMAIN",
+        "DNS_PRIMARY_UPSTREAM",
         "DNS_FALLBACK_UPSTREAM",
+        "OPENWRT_ENABLED",
+        "OPENWRT_URL",
+        "OPENWRT_USER",
+        "OPENWRT_PASSWORD",
     ):
         monkeypatch.delenv(key, raising=False)
     settings = build_settings(env_file=tmp_path / "missing.env")
@@ -53,3 +58,6 @@ def test_build_settings_has_no_private_defaults(tmp_path, monkeypatch) -> None:
     assert settings.box_pw == ""
     assert settings.dns_domain == ""
     assert settings.dns_fallback_upstream == ""
+    assert settings.openwrt_enabled is False
+    assert settings.openwrt_url == ""
+    assert settings.openwrt_user == ""

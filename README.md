@@ -25,8 +25,9 @@ Owner-Namen `foo.<dns-domain>.` zurückgeschrieben.
 - Stündlicher Abruf per eingebautem Scheduler
 - Mesh-Topologie inkl. LAN/WLAN/PLC-Verbindungen und PLC-Raten
 - Alle bekannten FRITZ!Box-Hosts (aktiv und offline)
+- Optional: zweite Host-Quelle OpenWrt (DHCP-Leases + statische Hosts) via ubus
 - Webinterface für Dashboard, Topologie, Hosts, DNS und Historie
-- DNS-Records aus Hostnamen und IPs, inkl. Konflikt-Erkennung
+- DNS-Records aus Hostnamen und IPs, inkl. Konflikt-Erkennung und Quellenangabe
 - `dns/hosts` für CoreDNS, `dns/<dns-domain>.zone` als Export
 - MISS-Fallback: unbekannte `foo.<dns-domain>` werden als `foo.` an die
   FRITZ!Box gefragt; Antworten werden auf `foo.<dns-domain>.` zurückgeschrieben
@@ -84,6 +85,14 @@ DNS_NS_IP=192.0.2.10
 
 SNAPSHOT_RETENTION_DAYS=90
 RAW_RETENTION_DAYS=30
+
+# Optional: OpenWrt als zweite Host-Quelle
+OPENWRT_ENABLED=0
+OPENWRT_URL=http://192.0.2.3
+OPENWRT_USER=ubusro
+OPENWRT_PASSWORD=openwrt-password
+OPENWRT_TIMEOUT=25
+OPENWRT_VERIFY_TLS=0
 ```
 
 `DNS_FALLBACK_MODE=bare` fragt bei einem MISS den nackten Hostnamen `foo` bei
@@ -276,12 +285,68 @@ bekannte Namen aus dem letzten Sync). Das würde allerdings die Live-Erkennung
 neuer, noch nicht gecachter Hosts abschalten und ist daher eine bewusste
 Abwägung.
 
+## OpenWrt (optional)
+
+Ein OpenWrt-Router kann als zweite Host-Quelle angebunden werden. Der Abruf
+läuft über die LuCI/ubus-JSON-RPC-Schnittstelle `http://<router>/ubus`
+(`uhttpd-mod-ubus` + `rpcd` + `rpcd-mod-luci`, bei LuCI Standard).
+
+Verwendet werden:
+
+- `luci-rpc getDHCPLeases` – aktive IPv4-/IPv6-Leases
+- `luci-rpc getHostHints` – bekannte und statisch konfigurierte Hosts (auch
+  offline)
+
+Die Hosts werden über die MAC mit den FRITZ!Box-Daten zusammengeführt und
+erscheinen unter derselben `DNS_DOMAIN` in `/hosts` und im DNS. In der
+Oberfläche zeigt die Spalte „Quelle“ den Ursprung (`FritzBox`, `OpenWrt`,
+`FritzBox Mesh`); die Hosts-Seite hat zusätzlich einen Quellen-Filter.
+Schlägt der OpenWrt-Abruf fehl, bleibt der FRITZ!Box-Abruf erfolgreich und der
+Fehler wird als Warnung im Snapshot vermerkt.
+
+Für den Dauerbetrieb empfiehlt sich ein Read-only-User statt `root`. Auf dem
+Router per SSH:
+
+```sh
+adduser -D -H -s /bin/false ubusro
+passwd ubusro
+
+cat > /usr/share/rpcd/acl.d/ubusro.json <<'EOF'
+{
+  "ubusro": {
+    "description": "fritz-lan-dns read-only",
+    "read": {
+      "ubus": {
+        "session": ["access", "login"],
+        "luci-rpc": ["getDHCPLeases", "getHostHints"],
+        "luci": ["getDHCPLeases", "getHostHints"]
+      }
+    },
+    "write": {}
+  }
+}
+EOF
+chmod 644 /usr/share/rpcd/acl.d/ubusro.json
+
+uci add rpcd login
+uci set rpcd.@login[-1].username='ubusro'
+uci set rpcd.@login[-1].password='$p$ubusro'
+uci add_list rpcd.@login[-1].read='ubusro'
+uci commit rpcd
+/etc/init.d/rpcd restart
+
+echo '/usr/share/rpcd/acl.d/ubusro.json' >> /etc/sysupgrade.conf
+```
+
+Der Docker-Container muss den OpenWrt-Router im anderen Subnetz erreichen
+können (Routing/Firewall auf dem Docker-Host).
+
 ## Webinterface
 
 - `/` Dashboard: letzter Lauf, Zähler, Konflikte, Historie, Refresh
 - `/topology`: Mesh-Baum und Offline-Geräte
-- `/hosts`: alle bekannten Hosts, Suche und Filter
-- `/dns`: Records, Konflikte, Serial, Corefile, Downloads
+- `/hosts`: alle bekannten Hosts, Suche, Status- und Quellen-Filter
+- `/dns`: Records mit Quelle, Konflikte, Serial, Corefile, Downloads
 - `/history`: Snapshots und Fehler
 - `/api/status`, `/api/topology`, `/api/hosts`, `/api/dns`,
   `/api/snapshots`, `/api/snapshots/{id}`

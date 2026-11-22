@@ -6,7 +6,7 @@ from collections import defaultdict
 from ..models import DnsRecord, HostRecord
 from ..util import sanitize_hostname
 
-_SOURCE_PRIORITY = {"static": 3, "fritz": 2, "mesh": 1, "": 0}
+_SOURCE_PRIORITY = {"static": 3, "fritz": 2, "openwrt": 2, "mesh": 1, "": 0}
 
 
 def _candidate_ip(value: str | None, include_ipv6: bool) -> str | None:
@@ -121,6 +121,7 @@ def build_dns_records(
                     status="conflict",
                     conflict=conflict,
                     last_seen=candidate["last_seen"],
+                    source=candidate["source"],
                 )
             )
 
@@ -143,4 +144,5 @@ def _to_record(candidate: dict, domain: str) -> DnsRecord:
         status=status,
         conflict=candidate.get("conflict"),
         last_seen=candidate["last_seen"],
+        source=candidate["source"],
     )

@@ -22,6 +22,15 @@
             <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inaktiv</option>
         </select>
     </label>
+    <label class="field">
+        <span>Quelle</span>
+        <select name="source">
+            <option value="" {% if not source %}selected{% endif %}>Alle</option>
+            <option value="fritz" {% if source == 'fritz' %}selected{% endif %}>FritzBox</option>
+            <option value="openwrt" {% if source == 'openwrt' %}selected{% endif %}>OpenWrt</option>
+            <option value="mesh" {% if source == 'mesh' %}selected{% endif %}>FritzBox Mesh</option>
+        </select>
+    </label>
     <div class="filter-actions">
         <button type="submit">Filtern</button>
         <a class="reset-link" href="/hosts">Zurücksetzen</a>
@@ -40,7 +49,7 @@
             <td>{% if host.active %}<span class="badge active">aktiv</span>{% else %}<span class="badge stale">inaktiv</span>{% endif %}</td>
             <td>{{ host.interface_type or "-" }}</td>
             <td>{{ host.last_seen or "-" }}</td>
-            <td>{{ host.source }}</td>
+            <td>{% if host.source %}<span class="badge source-{{ host.source }}">{{ host.source_label }}</span>{% else %}-{% endif %}</td>
             <td>{{ host.description }}</td>
         </tr>
         {% else %}

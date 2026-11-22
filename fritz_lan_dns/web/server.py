@@ -15,7 +15,7 @@ from .. import db
 from ..config import ConfigError, build_settings
 from ..dns import ensure_dns_files
 from ..scheduler import FetchScheduler
-from ..util import http_url
+from ..util import http_url, source_label
 from . import data as web_data
 
 LOGGER = logging.getLogger("fritz_lan_dns.web")
@@ -55,6 +55,7 @@ app = FastAPI(title="Fritz!Box LAN DNS", version="0.1.0", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(BASE / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE / "templates"))
 templates.env.globals["http_url"] = http_url
+templates.env.globals["source_label"] = source_label
 
 
 def _conn():
@@ -128,9 +129,9 @@ def api_topology() -> JSONResponse:
 
 
 @app.get("/api/hosts")
-def api_hosts(q: str = "", status: str = "") -> JSONResponse:
+def api_hosts(q: str = "", status: str = "", source: str = "") -> JSONResponse:
     with _conn() as conn:
-        rows = web_data.hosts(conn, query=q, status=status)
+        rows = web_data.hosts(conn, query=q, status=status, source=source)
     return JSONResponse({"hosts": rows})
 
 
@@ -197,9 +198,11 @@ def topology_page(request: Request) -> HTMLResponse:
 
 
 @app.get("/hosts", response_class=HTMLResponse)
-def hosts_page(request: Request, q: str = "", status: str = "") -> HTMLResponse:
+def hosts_page(
+    request: Request, q: str = "", status: str = "", source: str = ""
+) -> HTMLResponse:
     with _conn() as conn:
-        rows = web_data.hosts(conn, query=q, status=status)
+        rows = web_data.hosts(conn, query=q, status=status, source=source)
         latest = db.latest_snapshot(conn)
     return templates.TemplateResponse(
         request,
@@ -210,6 +213,7 @@ def hosts_page(request: Request, q: str = "", status: str = "") -> HTMLResponse:
             "hosts": rows,
             "query": q,
             "status": status,
+            "source": source,
             "latest": latest,
         },
     )

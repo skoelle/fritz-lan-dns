@@ -38,6 +38,12 @@ def make_settings(tmp_path: Path, **overrides) -> Settings:
         "dns_container_root": "/zones",
         "fritz_timeout": 25,
         "fritz_verify_tls": False,
+        "openwrt_enabled": False,
+        "openwrt_url": "",
+        "openwrt_user": "",
+        "openwrt_password": "",
+        "openwrt_timeout": 25,
+        "openwrt_verify_tls": False,
         "log_level": "INFO",
     }
     values.update(overrides)

@@ -38,6 +38,19 @@ def http_url(ip: str | None) -> str | None:
     return f"http://{ip}/"
 
 
+SOURCE_LABELS = {
+    "fritz": "FritzBox",
+    "mesh": "FritzBox Mesh",
+    "openwrt": "OpenWrt",
+    "static": "Statisch",
+}
+
+
+def source_label(source: str | None) -> str:
+    value = (source or "").strip().lower()
+    return SOURCE_LABELS.get(value, source or "-")
+
+
 def load_device_names(path: Path) -> dict[str, str]:
     descriptions: dict[str, str] = {}
     if not path.exists():

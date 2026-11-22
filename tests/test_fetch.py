@@ -46,6 +46,82 @@ class FakeClient:
         )
 
 
+class FakeOpenWrt:
+    def __init__(self, *args, **kwargs) -> None:
+        pass
+
+    def get_dhcp_leases(self) -> dict:
+        return {
+            "dhcp_leases": [
+                {
+                    "macaddr": "AA:BB:CC:00:00:10",
+                    "ipaddr": "192.0.2.150",
+                    "hostname": "owrt-nas",
+                    "expires": 100,
+                }
+            ],
+            "dhcp6_leases": [],
+        }
+
+    def get_host_hints(self) -> dict:
+        return {
+            "AA:BB:CC:00:00:11": {
+                "name": "owrt-printer",
+                "ipaddrs": ["192.0.2.151"],
+            }
+        }
+
+
+def _openwrt_settings(tmp_path: Path):
+    return make_settings(
+        tmp_path,
+        openwrt_enabled=True,
+        openwrt_url="http://192.0.2.3",
+        openwrt_user="root",
+        openwrt_password="secret",
+    )
+
+
+def test_run_fetch_includes_openwrt_hosts(tmp_path: Path, monkeypatch) -> None:
+    settings = _openwrt_settings(tmp_path)
+    monkeypatch.setattr("fritz_lan_dns.fetch.FritzClient", FakeClient)
+    monkeypatch.setattr("fritz_lan_dns.fetch.OpenWrtClient", FakeOpenWrt)
+
+    result = run_fetch(settings)
+
+    assert result["openwrt_hosts"] == 2
+    hosts_text = settings.hosts_file.read_text(encoding="utf-8")
+    assert "owrt-nas.example.test" in hosts_text
+    assert "owrt-printer.example.test" in hosts_text
+    with db.connect(settings.db_path) as conn:
+        hosts = {host.hostname: host for host in db.load_hosts(conn)}
+        assert hosts["owrt-nas"].source == "openwrt"
+        records = {record.hostname: record for record in db.load_dns_records(conn)}
+        assert records["owrt-nas"].source == "openwrt"
+        assert records["owrt-printer"].status == "stale"
+
+
+def test_run_fetch_openwrt_failure_is_warning(tmp_path: Path, monkeypatch) -> None:
+    settings = _openwrt_settings(tmp_path)
+    monkeypatch.setattr("fritz_lan_dns.fetch.FritzClient", FakeClient)
+
+    class FailingOpenWrt:
+        def __init__(self, *args, **kwargs) -> None:
+            raise RuntimeError("router down")
+
+    monkeypatch.setattr("fritz_lan_dns.fetch.OpenWrtClient", FailingOpenWrt)
+
+    result = run_fetch(settings)
+
+    assert result["openwrt_hosts"] == 0
+    assert "OpenWrt" in (result["warning"] or "")
+    assert "router.example.test" in settings.hosts_file.read_text(encoding="utf-8")
+    with db.connect(settings.db_path) as conn:
+        latest = db.latest_snapshot(conn)
+        assert latest is not None
+        assert latest["status"] == "ok"
+
+
 def test_run_fetch_end_to_end(tmp_path: Path, monkeypatch) -> None:
     settings = make_settings(tmp_path)
     monkeypatch.setattr("fritz_lan_dns.fetch.FritzClient", FakeClient)

@@ -60,6 +60,7 @@ class DnsRecord:
     status: str
     conflict: str | None = None
     last_seen: str | None = None
+    source: str = ""
 
     @property
     def writable(self) -> bool:

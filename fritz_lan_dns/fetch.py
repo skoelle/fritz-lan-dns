@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import time
 from datetime import datetime, timezone
@@ -10,6 +11,8 @@ from .config import Settings
 from .dns import build_dns_records, ensure_dns_files, write_dns_files
 from .fritz import FritzClient, load_mesh_json, parse_host_entries, parse_mesh
 from .merge import merge_hosts
+from .models import HostRecord
+from .openwrt import OpenWrtClient, parse_openwrt_hosts
 from .portscan import scan_ports
 from .util import iso_now, load_device_names
 
@@ -22,6 +25,41 @@ def _write_raw(settings: Settings, kind: str, content: str) -> Path:
     path = settings.raw_dir / f"{stamp}-{kind}.json"
     path.write_text(content, encoding="utf-8")
     return path
+
+
+def _fetch_openwrt_hosts(settings: Settings) -> tuple[list[HostRecord], str | None]:
+    if not settings.openwrt_enabled:
+        return [], None
+    missing = [
+        name
+        for name, value in (
+            ("OPENWRT_URL", settings.openwrt_url),
+            ("OPENWRT_USER", settings.openwrt_user),
+            ("OPENWRT_PASSWORD", settings.openwrt_password),
+        )
+        if not value
+    ]
+    if missing:
+        return [], "OpenWrt-Konfiguration unvollständig: " + ", ".join(missing)
+    try:
+        client = OpenWrtClient(
+            settings.openwrt_url,
+            settings.openwrt_user,
+            settings.openwrt_password,
+            timeout=settings.openwrt_timeout,
+            verify_tls=settings.openwrt_verify_tls,
+        )
+        leases = client.get_dhcp_leases()
+        hints = client.get_host_hints()
+        _write_raw(settings, "openwrt-leases", json.dumps(leases, ensure_ascii=False))
+        _write_raw(settings, "openwrt-hints", json.dumps(hints, ensure_ascii=False))
+        hosts = parse_openwrt_hosts(
+            leases, hints, include_ipv6=settings.dns_include_ipv6
+        )
+        return hosts, None
+    except Exception as exc:  # noqa: BLE001 - optionaler Abruf darf Fetch nicht stoppen
+        LOGGER.warning("OpenWrt-Abruf fehlgeschlagen: %s", exc)
+        return [], f"OpenWrt-Abruf fehlgeschlagen: {exc}"
 
 
 def prune_raw_files(settings: Settings) -> int:
@@ -75,7 +113,13 @@ def run_fetch(settings: Settings, legacy_json: Path | None = None) -> dict:
                     (warning + "; " if warning else "")
                     + "Hosts-API lieferte keine Einträge, nutze Mesh-Nodes"
                 )
-            hosts = merge_hosts(host_entries, mesh.nodes, descriptions)
+
+            extra_hosts, openwrt_error = _fetch_openwrt_hosts(settings)
+            if openwrt_error:
+                warning = (warning + "; " if warning else "") + openwrt_error
+            hosts = merge_hosts(
+                host_entries, mesh.nodes, descriptions, extra_hosts=extra_hosts
+            )
 
             http_results: dict[str, bool] = {}
             if settings.http_scan_enabled:
@@ -140,12 +184,13 @@ def run_fetch(settings: Settings, legacy_json: Path | None = None) -> dict:
             db.prune_http_status(conn, settings.host_retention_days)
             prune_raw_files(settings)
             LOGGER.info(
-                "Snapshot %s: %s Nodes (%s online), %s Hosts, %s DNS-Records, "
-                "%s HTTP-Ports",
+                "Snapshot %s: %s Nodes (%s online), %s Hosts (%s OpenWrt), "
+                "%s DNS-Records, %s HTTP-Ports",
                 snapshot_id,
                 len(mesh.nodes),
                 sum(1 for node in mesh.nodes if node.online),
                 len(hosts),
+                len(extra_hosts),
                 dns_summary["records"],
                 http_open_count,
             )
@@ -154,6 +199,7 @@ def run_fetch(settings: Settings, legacy_json: Path | None = None) -> dict:
                 "nodes": len(mesh.nodes),
                 "online": sum(1 for node in mesh.nodes if node.online),
                 "hosts": len(hosts),
+                "openwrt_hosts": len(extra_hosts),
                 "dns_records": dns_summary["records"],
                 "dns_conflicts": dns_summary["conflicts"],
                 "http_open": http_open_count,

@@ -93,6 +93,7 @@ CREATE TABLE IF NOT EXISTS dns_records (
     status TEXT NOT NULL,
     conflict TEXT,
     last_seen TEXT,
+    source TEXT,
     updated_at TEXT NOT NULL,
     UNIQUE(hostname, ip)
 );
@@ -133,9 +134,16 @@ def connect(path: Path) -> Iterator[sqlite3.Connection]:
         conn.close()
 
 
+def _migrate_schema(conn: sqlite3.Connection) -> None:
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(dns_records)")}
+    if "source" not in columns:
+        conn.execute("ALTER TABLE dns_records ADD COLUMN source TEXT")
+
+
 def init_schema(path: Path) -> None:
     with connect(path) as conn:
         conn.executescript(SCHEMA)
+        _migrate_schema(conn)
         conn.commit()
 
 
@@ -357,8 +365,8 @@ def replace_dns_records(conn: sqlite3.Connection, records: Iterable[DnsRecord]) 
     conn.executemany(
         """
         INSERT INTO dns_records (
-            hostname, fqdn, ip, mac, status, conflict, last_seen, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            hostname, fqdn, ip, mac, status, conflict, last_seen, source, updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (
@@ -369,6 +377,7 @@ def replace_dns_records(conn: sqlite3.Connection, records: Iterable[DnsRecord]) 
                 record.status,
                 record.conflict,
                 record.last_seen,
+                record.source,
                 now,
             )
             for record in records
@@ -380,7 +389,7 @@ def replace_dns_records(conn: sqlite3.Connection, records: Iterable[DnsRecord]) 
 def load_dns_records(conn: sqlite3.Connection) -> list[DnsRecord]:
     rows = conn.execute(
         """
-        SELECT hostname, fqdn, ip, mac, status, conflict, last_seen
+        SELECT hostname, fqdn, ip, mac, status, conflict, last_seen, source
         FROM dns_records
         ORDER BY lower(fqdn), ip
         """
@@ -394,6 +403,7 @@ def load_dns_records(conn: sqlite3.Connection) -> list[DnsRecord]:
             status=row["status"],
             conflict=row["conflict"],
             last_seen=row["last_seen"],
+            source=row["source"] or "",
         )
         for row in rows
     ]

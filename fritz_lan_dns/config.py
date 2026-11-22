@@ -100,6 +100,12 @@ class Settings:
     dns_container_root: str
     fritz_timeout: int
     fritz_verify_tls: bool
+    openwrt_enabled: bool
+    openwrt_url: str
+    openwrt_user: str
+    openwrt_password: str
+    openwrt_timeout: int
+    openwrt_verify_tls: bool
     log_level: str
 
     @property
@@ -192,5 +198,11 @@ def build_settings(env_file: Path | None = None) -> Settings:
         dns_container_root=_env("DNS_CONTAINER_ROOT") or "/zones",
         fritz_timeout=_env_int("FRITZ_TIMEOUT", 25),
         fritz_verify_tls=_env_bool("FRITZ_VERIFY_TLS", False),
+        openwrt_enabled=_env_bool("OPENWRT_ENABLED", False),
+        openwrt_url=(_env("OPENWRT_URL") or "").rstrip("/"),
+        openwrt_user=_env("OPENWRT_USER") or "",
+        openwrt_password=_env("OPENWRT_PASSWORD") or "",
+        openwrt_timeout=_env_int("OPENWRT_TIMEOUT", 25),
+        openwrt_verify_tls=_env_bool("OPENWRT_VERIFY_TLS", False),
         log_level=(_env("LOG_LEVEL") or "INFO").upper(),
     )
