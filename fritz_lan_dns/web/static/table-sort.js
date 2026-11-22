@@ -8,6 +8,11 @@
         return (cell ? cell.textContent : "").trim();
     }
 
+    function isBlank(value) {
+        const trimmed = String(value).trim();
+        return trimmed === "" || trimmed === "-";
+    }
+
     function sortTable(table, th) {
         const tbody = table.tBodies[0];
         const headerRow = table.tHead && table.tHead.rows[0];
@@ -29,6 +34,11 @@
         rows.sort((a, b) => {
             const left = cellValue(a.row.cells[column]);
             const right = cellValue(b.row.cells[column]);
+            const leftBlank = isBlank(left);
+            const rightBlank = isBlank(right);
+            if (leftBlank !== rightBlank) {
+                return leftBlank ? 1 : -1;
+            }
             const result = collator.compare(left, right);
             if (result !== 0) {
                 return descending ? -result : result;
