@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Fritz!Box LAN DNS{% endblock %}
+{% block content %}
+<div class="toolbar">
+    <div>
+        <h2>Dashboard</h2>
+        {% if latest %}
+        <p class="meta">Letzter Snapshot: {{ latest.started_at }}{% if latest.status != 'ok' %} · Status: {{ latest.status }}{% endif %}</p>
+        {% else %}
+        <p class="meta">Noch kein Snapshot vorhanden.</p>
+        {% endif %}
+    </div>
+    <button id="refresh" type="button" onclick="refreshNow()">Jetzt aktualisieren</button>
+</div>
+<p id="refresh-status" class="hint"></p>
+
+{% if failed %}
+<div class="alert error">
+    <strong>Letzter Fehler:</strong> {{ failed.error or "unbekannt" }}
+</div>
+{% endif %}
+{% if latest and latest.warning %}
+<div class="alert warning">{{ latest.warning }}</div>
+{% endif %}
+
+<div class="stat-grid">
+    <div class="box stat-box"><div class="box-title">Mesh-Nodes</div><div class="stat-value">{{ counts.nodes }}</div><div class="stat-label">{{ counts.online }} online</div></div>
+    <div class="box stat-box"><div class="box-title">Hosts</div><div class="stat-value">{{ counts.hosts }}</div><div class="stat-label">{{ counts.active_hosts }} aktiv</div></div>
+    <div class="box stat-box"><div class="box-title">DNS-Records</div><div class="stat-value">{{ counts.dns_records }}</div><div class="stat-label">in hosts-Datei</div></div>
+    <div class="box stat-box"><div class="box-title">Konflikte</div><div class="stat-value">{{ counts.dns_conflicts }}</div><div class="stat-label">nicht geschrieben</div></div>
+</div>
+
+<div class="box">
+    <div class="box-title">Letzter Lauf</div>
+    {% if latest %}
+    <table>
+        <tbody>
+            <tr><th>ID</th><td>{{ latest.id }}</td></tr>
+            <tr><th>Start</th><td>{{ latest.started_at }}</td></tr>
+            <tr><th>Ende</th><td>{{ latest.finished_at or "-" }}</td></tr>
+            <tr><th>Status</th><td><span class="badge {{ latest.status }}">{{ latest.status }}</span></td></tr>
+            <tr><th>Dauer</th><td>{{ latest.duration_ms or "-" }} ms</td></tr>
+            <tr><th>DNS-Serial</th><td>{{ latest.zone_serial or "-" }}</td></tr>
+            <tr><th>DNS-Dateien</th><td><code>{{ settings.hosts_file }}</code></td></tr>
+        </tbody>
+    </table>
+    {% else %}
+    <p>Der erste Abruf läuft beim Start oder über den Button.</p>
+    {% endif %}
+</div>
+
+{% if conflicts %}
+<div class="box">
+    <div class="box-title">DNS-Konflikte</div>
+    <table>
+        <thead><tr><th>Hostname</th><th>IP</th><th>Grund</th></tr></thead>
+        <tbody>
+        {% for record in conflicts %}
+        <tr><td>{{ record.fqdn }}</td><td><code>{{ record.ip }}</code></td><td>{{ record.conflict or "" }}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<div class="box">
+    <div class="box-title">Letzte Snapshots</div>
+    <table>
+        <thead><tr><th>ID</th><th>Start</th><th>Status</th><th>Nodes</th><th>Hosts</th><th>DNS</th><th>Dauer</th></tr></thead>
+        <tbody>
+        {% for row in history %}
+        <tr>
+            <td>{{ row.id }}</td>
+            <td>{{ row.started_at }}</td>
+            <td><span class="badge {{ row.status }}">{{ row.status }}</span></td>
+            <td>{{ row.node_count }} ({{ row.online_count }})</td>
+            <td>{{ row.host_count }}</td>
+            <td>{{ row.dns_count }}</td>
+            <td>{{ row.duration_ms or "-" }} ms</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7">Noch keine Snapshots.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+async function refreshNow() {
+    const button = document.getElementById('refresh');
+    const status = document.getElementById('refresh-status');
+    button.disabled = true;
+    status.textContent = 'Abruf gestartet ...';
+    try {
+        const response = await fetch('/api/refresh', {method: 'POST'});
+        if (!response.ok) {
+            const body = await response.json().catch(() => ({}));
+            throw new Error(body.detail || ('HTTP ' + response.status));
+        }
+        status.textContent = 'Abruf läuft. Seite wird nach Abschluss neu geladen.';
+        const timer = setInterval(async () => {
+            const health = await fetch('/api/status').then(r => r.json());
+            if (!health.scheduler.running) {
+                clearInterval(timer);
+                location.reload();
+            }
+        }, 2000);
+    } catch (error) {
+        status.textContent = 'Fehler: ' + error.message;
+        button.disabled = false;
+    }
+}
+</script>
+{% endblock %}

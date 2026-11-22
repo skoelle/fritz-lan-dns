@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Hosts - Fritz!Box LAN DNS{% endblock %}
+{% block content %}
+<div class="toolbar">
+    <div>
+        <h2>Hosts</h2>
+        <p class="meta">{{ hosts|length }} Einträge{% if latest %} · Snapshot {{ latest.id }}{% endif %}</p>
+    </div>
+</div>
+
+<form class="filters box" method="get" action="/hosts">
+    <label class="field">
+        <span>Suche</span>
+        <input type="search" name="q" value="{{ query }}" placeholder="Hostname, IP, MAC, Beschreibung">
+    </label>
+    <label class="field">
+        <span>Status</span>
+        <select name="status">
+            <option value="" {% if not status %}selected{% endif %}>Alle</option>
+            <option value="active" {% if status == 'active' %}selected{% endif %}>Aktiv</option>
+            <option value="inactive" {% if status == 'inactive' %}selected{% endif %}>Inaktiv</option>
+        </select>
+    </label>
+    <div class="filter-actions">
+        <button type="submit">Filtern</button>
+        <a class="reset-link" href="/hosts">Zurücksetzen</a>
+    </div>
+</form>
+
+<div class="box">
+    <table>
+        <thead><tr><th>Hostname</th><th>IP</th><th>MAC</th><th>Status</th><th>Interface</th><th>Last Seen</th><th>Quelle</th><th>Beschreibung</th></tr></thead>
+        <tbody>
+        {% for host in hosts %}
+        <tr class="{% if not host.active %}offline{% endif %}">
+            <td>{{ host.hostname or "-" }}</td>
+            <td><code>{{ host.ip or "-" }}</code></td>
+            <td><code>{{ host.mac or "-" }}</code></td>
+            <td>{% if host.active %}<span class="badge active">aktiv</span>{% else %}<span class="badge stale">inaktiv</span>{% endif %}</td>
+            <td>{{ host.interface_type or "-" }}</td>
+            <td>{{ host.last_seen or "-" }}</td>
+            <td>{{ host.source }}</td>
+            <td>{{ host.description }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8">Keine Hosts gefunden.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

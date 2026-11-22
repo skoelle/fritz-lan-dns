@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Topologie - Fritz!Box LAN DNS{% endblock %}
+{% block content %}
+<div class="toolbar">
+    <div>
+        <h2>Mesh-Topologie</h2>
+        {% if latest %}<p class="meta">Snapshot {{ latest.id }} · {{ latest.started_at }}</p>{% endif %}
+    </div>
+</div>
+
+{% if not latest %}
+<p class="empty">Noch keine Topologie vorhanden.</p>
+{% else %}
+<div class="box">
+    <div class="box-title">Verbundene Nodes</div>
+    <table class="topology">
+        <thead><tr><th>Gerät</th><th>Rolle</th><th>Modell</th><th>Verbindung</th><th>PLC RX/TX</th><th>IP</th><th>Beschreibung</th></tr></thead>
+        <tbody>
+        {% for row in rows %}
+        <tr class="{% if not row.node.online %}offline{% endif %}">
+            <td><span style="padding-left: {{ row.depth * 1.4 }}rem">{{ row.node.device_name }}</span></td>
+            <td>{{ row.node.mesh_role }}</td>
+            <td>{{ row.node.device_model }}</td>
+            <td>{{ row.node.connection_type or "-" }}</td>
+            <td>{% if row.node.plc_rx_kbps or row.node.plc_tx_kbps %}{{ row.node.plc_rx_kbps or "-" }} / {{ row.node.plc_tx_kbps or "-" }} kbit/s{% else %}-{% endif %}</td>
+            <td><code>{{ row.node.ip or "-" }}</code></td>
+            <td>{{ row.node.description }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% if offline %}
+<div class="box">
+    <div class="box-title">Offline</div>
+    <table>
+        <thead><tr><th>Gerät</th><th>Modell</th><th>IP</th><th>Beschreibung</th></tr></thead>
+        <tbody>
+        {% for node in offline %}
+        <tr><td>{{ node.device_name }}</td><td>{{ node.device_model }}</td><td><code>{{ node.ip or "-" }}</code></td><td>{{ node.description }}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+
+<div class="box">
+    <div class="box-title">Links</div>
+    <table>
+        <thead><tr><th>A</th><th>B</th><th>Typ</th><th>Interface</th><th>Status</th><th>RX/TX</th></tr></thead>
+        <tbody>
+        {% for link in links %}
+        <tr><td><code>{{ link.node_a_uid[:12] }}</code></td><td><code>{{ link.node_b_uid[:12] }}</code></td><td>{{ link.interface_type }}</td><td>{{ link.interface_name }}</td><td>{{ link.state }}</td><td>{{ link.rx_kbps or "-" }} / {{ link.tx_kbps or "-" }}</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endif %}
+{% endblock %}

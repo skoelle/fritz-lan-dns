@@ -1,0 +1,53 @@
+# Example only. Copy to docker-compose.yml and adjust paths if needed.
+#
+# The app writes dns/hosts, dns/<domain>.zone and dns/Corefile.
+# CoreDNS reads them from /zones and reloads the Corefile/hosts automatically.
+#
+# Pi-hole stays the primary LAN DNS and delegates only the local domain:
+#   server=/<dns-domain>/<pve-ip>#53
+#
+# CoreDNS uses the host port 53. Make sure nothing else binds port 53 on the
+# Docker host. The web interface is exposed on 8346.
+services:
+  fritz-lan-dns:
+    build: .
+    image: fritz-lan-dns:latest
+    container_name: fritz-lan-dns
+    restart: unless-stopped
+    init: true
+    ports:
+      - "8346:8346"
+    volumes:
+      - ./db:/app/db
+      - ./data:/app/data
+      - ./dns:/app/dns
+      - ./config:/app/config:ro
+    environment:
+      TZ: Europe/Berlin
+      FRITZ_LAN_DNS_DATA_ROOT: /app/data
+      FRITZ_LAN_DNS_DB_ROOT: /app/db
+      FRITZ_LAN_DNS_DNS_ROOT: /app/dns
+      DNS_CONTAINER_ROOT: /zones
+      DEVICE_NAMES_FILE: /app/config/device-names.conf
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, urllib.request; urllib.request.urlopen('http://127.0.0.1:%s/health' % os.environ.get('WEB_PORT', '8346'), timeout=5)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  coredns:
+    image: coredns/coredns:1.12.1
+    container_name: fritz-lan-dns-coredns
+    restart: unless-stopped
+    command: ["-conf", "/zones/Corefile"]
+    volumes:
+      - ./dns:/zones:ro
+    ports:
+      - "53:53/udp"
+      - "53:53/tcp"
+    depends_on:
+      fritz-lan-dns:
+        condition: service_healthy

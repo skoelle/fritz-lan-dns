@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Fritz!Box LAN DNS{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="container">
+    <header class="header">
+        <div class="header-left">
+            <h1><a href="/">Fritz!Box LAN DNS</a></h1>
+        </div>
+        <nav class="header-nav">
+            <a href="/" class="{% if active_page == 'dashboard' %}active{% endif %}">Dashboard</a>
+            <a href="/topology" class="{% if active_page == 'topology' %}active{% endif %}">Topologie</a>
+            <a href="/hosts" class="{% if active_page == 'hosts' %}active{% endif %}">Hosts</a>
+            <a href="/dns" class="{% if active_page == 'dns' %}active{% endif %}">DNS</a>
+            <a href="/history" class="{% if active_page == 'history' %}active{% endif %}">Historie</a>
+        </nav>
+    </header>
+    {% block content %}{% endblock %}
+</div>
+{% block scripts %}{% endblock %}
+</body>
+</html>

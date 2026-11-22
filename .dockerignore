@@ -1,0 +1,17 @@
+.git
+.github
+.venv
+.venv-demo
+.env
+/data
+/db
+/dns
+tests
+__pycache__
+*.py[cod]
+.pytest_cache
+.ruff_cache
+*.log
+.DS_Store
+docker-compose.example.yml
+config/device-names.conf

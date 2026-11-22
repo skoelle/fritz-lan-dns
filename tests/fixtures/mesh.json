@@ -1,0 +1,120 @@
+{
+  "nodes": [
+    {
+      "uid": "uuid-master",
+      "device_name": "router",
+      "device_model": "FRITZ!Box 7590",
+      "mesh_role": "master",
+      "ip_addresses": [{"version": "V4", "value": "192.0.2.1/24"}],
+      "node_interfaces": [
+        {
+          "type": "LAN",
+          "name": "lan",
+          "node_links": [
+            {
+              "node_1_uid": "uuid-master",
+              "node_2_uid": "uuid-repeater",
+              "state": "CONNECTED",
+              "max_data_rate_rx": 1000000,
+              "max_data_rate_tx": 1000000
+            }
+          ]
+        },
+        {
+          "type": "WLAN",
+          "name": "5GHz",
+          "node_links": [
+            {
+              "node_1_uid": "uuid-master",
+              "node_2_uid": "uuid-wlan",
+              "state": "CONNECTED",
+              "max_data_rate_rx": 866000,
+              "max_data_rate_tx": 866000
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "uid": "uuid-repeater",
+      "device_name": "repeater",
+      "device_model": "FRITZ!Repeater 3000",
+      "mesh_role": "repeater",
+      "ip_addresses": [{"version": "V4", "value": "192.0.2.10/24"}],
+      "node_interfaces": [
+        {
+          "type": "LAN",
+          "name": "lan",
+          "node_links": [
+            {
+              "node_1_uid": "uuid-repeater",
+              "node_2_uid": "uuid-master",
+              "state": "CONNECTED"
+            }
+          ]
+        },
+        {
+          "type": "PLC",
+          "name": "plc",
+          "node_links": [
+            {
+              "node_1_uid": "uuid-repeater",
+              "node_2_uid": "uuid-powerline",
+              "state": "CONNECTED",
+              "cur_data_rate_rx": 180000,
+              "cur_data_rate_tx": 200000
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "uid": "uuid-wlan",
+      "device_name": "client",
+      "device_model": "Notebook",
+      "mesh_role": "client",
+      "ip_addresses": [{"version": "V4", "value": "192.0.2.20/24"}],
+      "node_interfaces": [
+        {
+          "type": "WLAN",
+          "name": "5GHz",
+          "node_links": [
+            {
+              "node_1_uid": "uuid-wlan",
+              "node_2_uid": "uuid-master",
+              "state": "CONNECTED"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "uid": "uuid-powerline",
+      "device_name": "powerline",
+      "device_model": "FRITZ!Powerline 1220E",
+      "mesh_role": "client",
+      "ip_addresses": [{"version": "V4", "value": "192.0.2.30/24"}],
+      "node_interfaces": [
+        {
+          "type": "PLC",
+          "name": "plc",
+          "node_links": [
+            {
+              "node_1_uid": "uuid-powerline",
+              "node_2_uid": "uuid-repeater",
+              "state": "CONNECTED"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "uid": "uuid-offline",
+      "device_name": "offline",
+      "device_model": "Unknown",
+      "mesh_role": "client",
+      "ip_addresses": [{"version": "V4", "value": "192.0.2.40/24"}],
+      "node_interfaces": []
+    }
+  ]
+}

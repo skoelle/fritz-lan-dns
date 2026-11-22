@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Historie - Fritz!Box LAN DNS{% endblock %}
+{% block content %}
+<div class="toolbar">
+    <div>
+        <h2>Historie</h2>
+        <p class="meta">Letzte {{ snapshots|length }} Snapshots</p>
+    </div>
+</div>
+
+<div class="box">
+    <table>
+        <thead><tr><th>ID</th><th>Start</th><th>Ende</th><th>Status</th><th>Nodes</th><th>Online</th><th>Hosts</th><th>DNS</th><th>Serial</th><th>Dauer</th><th>Fehler</th></tr></thead>
+        <tbody>
+        {% for row in snapshots %}
+        <tr>
+            <td>{{ row.id }}</td>
+            <td>{{ row.started_at }}</td>
+            <td>{{ row.finished_at or "-" }}</td>
+            <td><span class="badge {{ row.status }}">{{ row.status }}</span></td>
+            <td>{{ row.node_count }}</td>
+            <td>{{ row.online_count }}</td>
+            <td>{{ row.host_count }}</td>
+            <td>{{ row.dns_count }}</td>
+            <td>{{ row.zone_serial or "-" }}</td>
+            <td>{{ row.duration_ms or "-" }} ms</td>
+            <td class="error-text">{{ row.error or "" }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="11">Noch keine Snapshots.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

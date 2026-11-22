@@ -1,0 +1,138 @@
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from fritz_lan_dns import db
+from fritz_lan_dns.dns import build_dns_records, ensure_dns_files, write_dns_files
+from fritz_lan_dns.fritz.mesh import parse_mesh
+from fritz_lan_dns.models import HostRecord
+from fritz_lan_dns.util import iso_now
+from fritz_lan_dns.web import data as web_data
+from tests.helpers import make_settings
+
+FIXTURE = Path(__file__).parent / "fixtures" / "mesh.json"
+
+
+def _settings(tmp_path: Path):
+    return make_settings(tmp_path)
+
+
+def _mesh():
+    return parse_mesh(json.loads(FIXTURE.read_text(encoding="utf-8")), {"router": "Router"})
+
+
+def _host(name: str, ip: str, *, active: bool = True) -> HostRecord:
+    return HostRecord(
+        key=f"mac:{name}",
+        hostname=name,
+        ip=ip,
+        mac=f"aa:bb:cc:00:00:{len(name):02x}",
+        active=active,
+        source="fritz",
+        last_seen=iso_now(),
+    )
+
+
+def _store(conn, mesh, hosts, raw_mesh: str = "{}", raw_hosts: str = "{}") -> int:
+    snapshot_id = db.start_snapshot(conn)
+    db.store_snapshot_data(conn, snapshot_id, mesh, hosts, raw_mesh, raw_hosts, None)
+    db.finish_snapshot(
+        conn,
+        snapshot_id,
+        status="ok",
+        duration_ms=10,
+        node_count=len(mesh.nodes),
+        online_count=sum(1 for node in mesh.nodes if node.online),
+        host_count=len(hosts),
+    )
+    return snapshot_id
+
+
+def test_snapshot_and_hosts_roundtrip(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    db.init_schema(settings.db_path)
+    mesh = _mesh()
+    with db.connect(settings.db_path) as conn:
+        snapshot_id = _store(conn, mesh, [_host("printer", "192.0.2.50")])
+        latest = db.latest_snapshot(conn)
+        assert latest is not None
+        assert latest["id"] == snapshot_id
+        assert latest["node_count"] == len(mesh.nodes)
+        hosts = db.load_hosts(conn)
+        assert len(hosts) == 1
+        assert hosts[0].hostname == "printer"
+        assert db.counts(conn)["hosts"] == 1
+
+
+def test_missing_host_becomes_inactive_and_stale(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    db.init_schema(settings.db_path)
+    mesh = _mesh()
+    with db.connect(settings.db_path) as conn:
+        _store(conn, mesh, [_host("printer", "192.0.2.50")])
+        _store(conn, mesh, [])
+        hosts = db.load_hosts(conn)
+        assert len(hosts) == 1
+        assert hosts[0].active is False
+        records = build_dns_records(hosts, [], settings.dns_domain)
+        assert records[0].status == "stale"
+
+
+def test_write_dns_files_serial_only_on_change(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    db.init_schema(settings.db_path)
+    with db.connect(settings.db_path) as conn:
+        ensure_dns_files(settings, conn)
+        records = build_dns_records([_host("printer", "192.0.2.50")], [], settings.dns_domain)
+        first = write_dns_files(settings, conn, records)
+        second = write_dns_files(settings, conn, records)
+        assert first["serial"] == second["serial"] == 1
+        assert settings.hosts_file.read_text(encoding="utf-8") == (
+            "192.0.2.50 printer.example.test\n"
+        )
+        changed = build_dns_records([_host("printer", "192.0.2.51")], [], settings.dns_domain)
+        third = write_dns_files(settings, conn, changed)
+        assert third["serial"] == 2
+        assert "printer IN A 192.0.2.51" in settings.zone_file.read_text(encoding="utf-8")
+
+
+def test_web_data_topology_hosts_and_dns(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    db.init_schema(settings.db_path)
+    mesh = _mesh()
+    with db.connect(settings.db_path) as conn:
+        _store(conn, mesh, [_host("printer", "192.0.2.50")])
+        records = build_dns_records(db.load_hosts(conn), [], settings.dns_domain)
+        db.replace_dns_records(conn, records)
+
+        topology = web_data.topology(conn)
+        assert topology["master"] is not None
+        assert topology["master"].device_name == "router"
+        assert len(topology["offline"]) == 1
+
+        host_rows = web_data.hosts(conn, query="printer", status="active")
+        assert len(host_rows) == 1
+        assert host_rows[0]["hostname"] == "printer"
+
+        dns = web_data.dns(conn, settings)
+        assert len(dns["records"]) == 1
+        assert dns["records"][0].fqdn == "printer.example.test"
+
+        dashboard = web_data.dashboard(conn, settings)
+        assert dashboard["counts"]["nodes"] == len(mesh.nodes)
+
+
+def test_prune_old_snapshots(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    db.init_schema(settings.db_path)
+    with db.connect(settings.db_path) as conn:
+        snapshot_id = _store(conn, _mesh(), [])
+        conn.execute(
+            "UPDATE snapshots SET started_at = '2000-01-01T00:00:00+00:00' WHERE id = ?",
+            (snapshot_id,),
+        )
+        conn.commit()
+        removed = db.prune_snapshots(conn, 1)
+        assert removed == 1
+        assert db.latest_snapshot(conn) is None

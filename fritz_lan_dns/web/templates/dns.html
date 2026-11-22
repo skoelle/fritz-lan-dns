@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}DNS - Fritz!Box LAN DNS{% endblock %}
+{% block content %}
+<div class="toolbar">
+    <div>
+        <h2>DNS</h2>
+        <p class="meta">Zone {{ settings.dns_domain }} · Serial {{ serial or "-" }}</p>
+    </div>
+</div>
+
+<div class="stat-grid">
+    <div class="box stat-box"><div class="box-title">Records</div><div class="stat-value">{{ records|length }}</div><div class="stat-label">inkl. Konflikte</div></div>
+    <div class="box stat-box"><div class="box-title">Konflikte</div><div class="stat-value">{{ conflicts|length }}</div><div class="stat-label">nicht geschrieben</div></div>
+    <div class="box stat-box"><div class="box-title">Fallback</div><div class="stat-value stat-value-small">{% if settings.dns_fallback_enabled %}{{ settings.dns_fallback_mode }}{% else %}aus{% endif %}</div><div class="stat-label">{{ settings.dns_fallback_upstream }}</div></div>
+    <div class="box stat-box"><div class="box-title">CoreDNS</div><div class="stat-value stat-value-small">Port 53</div><div class="stat-label">Pi-hole delegiert hierher</div></div>
+</div>
+
+<div class="box">
+    <div class="box-title">Dateien</div>
+    <p>hosts: <a href="/dns/hosts">hosts herunterladen</a> · Zone: <a href="/dns/zone">Zone herunterladen</a> · Corefile: <a href="/dns/corefile">Corefile anzeigen</a></p>
+    <p class="hint">Pi-hole-Delegation: <code>server=/{{ settings.dns_domain }}/&lt;pve-ip&gt;#53</code></p>
+</div>
+
+<div class="box">
+    <div class="box-title">DNS-Records</div>
+    <table>
+        <thead><tr><th>FQDN</th><th>IP</th><th>MAC</th><th>Status</th><th>Last Seen</th><th>Konflikt</th></tr></thead>
+        <tbody>
+        {% for record in records %}
+        <tr class="{% if record.status == 'conflict' %}conflict{% endif %}">
+            <td>{{ record.fqdn }}</td>
+            <td><code>{{ record.ip }}</code></td>
+            <td><code>{{ record.mac or "-" }}</code></td>
+            <td><span class="badge {{ record.status }}">{{ record.status }}</span></td>
+            <td>{{ record.last_seen or "-" }}</td>
+            <td>{{ record.conflict or "" }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6">Noch keine Records.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<div class="box">
+    <div class="box-title">Corefile</div>
+    <pre>{{ corefile }}</pre>
+</div>
+{% endblock %}

@@ -1,0 +1,31 @@
+# Example Corefile for manual use.
+# The app generates dns/Corefile automatically from the .env values.
+# This example uses the reserved test domain and documentation IPs.
+
+example.test:53 {
+    errors
+    hosts /zones/hosts example.test {
+        ttl 60
+        reload 5s
+        no_reverse
+        fallthrough
+    }
+    forward . 127.0.0.1:5354
+    cache 30
+}
+
+.:53 {
+    errors
+    reload 30s
+    health :8080
+    ready :8181
+    forward . 192.0.2.2:53
+    cache 30
+}
+
+.:5354 {
+    bind 127.0.0.1
+    errors
+    rewrite name regex ^([^.]+)\.example\.test\.$ {1}.
+    forward . 192.0.2.1:53
+}

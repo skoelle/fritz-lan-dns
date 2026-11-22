@@ -1,0 +1,5 @@
+# hostname description
+router Router
+repeater Repeater
+printer Printer
+nas NAS
