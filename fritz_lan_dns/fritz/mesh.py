@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 from collections import defaultdict, deque
 from typing import Any
 
@@ -11,16 +12,46 @@ class MeshParseError(ValueError):
     pass
 
 
+_ATTRIBUTE_WEIGHTS = {
+    "STATIC": 8,
+    "DHCP": 4,
+    "MANAGEMENT": 2,
+    "NEIGHBOUR_LIST": 1,
+    "GUEST": -5,
+    "UNKNOWN_NETWORK": -5,
+}
+
+
+def _address_score(address: ipaddress.IPv4Address, attributes: set[str]) -> int:
+    score = sum(
+        weight for name, weight in _ATTRIBUTE_WEIGHTS.items() if name in attributes
+    )
+    if address.is_link_local:
+        score -= 100
+    if address.is_loopback or address.is_unspecified:
+        score -= 200
+    return score
+
+
 def _ipv4(node: dict[str, Any]) -> str | None:
-    addresses = node.get("ip_addresses") or []
-    for address in addresses:
+    best: tuple[int, ipaddress.IPv4Address] | None = None
+    for address in node.get("ip_addresses") or []:
         if not isinstance(address, dict):
             continue
-        if str(address.get("version", "")).upper() == "V4":
-            value = str(address.get("value", "")).split("/")[0].strip()
-            if value:
-                return value
-    return None
+        if str(address.get("version", "")).upper() != "V4":
+            continue
+        value = str(address.get("value", "")).split("/")[0].strip()
+        if not value:
+            continue
+        try:
+            parsed = ipaddress.IPv4Address(value)
+        except ValueError:
+            continue
+        attributes = {str(item).upper() for item in address.get("attributes") or []}
+        score = _address_score(parsed, attributes)
+        if best is None or score > best[0]:
+            best = (score, parsed)
+    return str(best[1]) if best else None
 
 
 def _find_mac(node: dict[str, Any]) -> str | None:
