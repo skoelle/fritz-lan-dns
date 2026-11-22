@@ -11,50 +11,87 @@
 {% if not latest %}
 <p class="empty">Noch keine Topologie vorhanden.</p>
 {% else %}
-<div class="box">
-    <div class="box-title">Verbundene Nodes</div>
-    <table class="topology">
-        <thead><tr><th>Gerät</th><th>Rolle</th><th>Modell</th><th>Verbindung</th><th>PLC RX/TX</th><th>IP</th><th>Beschreibung</th></tr></thead>
-        <tbody>
-        {% for row in rows %}
-        <tr class="{% if not row.node.online %}offline{% endif %}">
-            <td><span style="padding-left: {{ row.depth * 1.4 }}rem">{{ row.node.device_name }}</span></td>
-            <td>{{ row.node.mesh_role }}</td>
-            <td>{{ row.node.device_model }}</td>
-            <td>{{ row.node.connection_type or "-" }}</td>
-            <td>{% if row.node.plc_rx_kbps or row.node.plc_tx_kbps %}{{ row.node.plc_rx_kbps or "-" }} / {{ row.node.plc_tx_kbps or "-" }} kbit/s{% else %}-{% endif %}</td>
-            <td><code>{{ row.node.ip or "-" }}</code></td>
-            <td>{{ row.node.description }}</td>
-        </tr>
-        {% endfor %}
-        </tbody>
-    </table>
+<div class="stat-grid topology-summary">
+    <div class="box stat-box">
+        <div class="box-title">📊 Gesamt</div>
+        <div class="stat-value">{{ summary.total }}</div>
+        <div class="stat-label">Mesh-Geräte</div>
+    </div>
+    <div class="box stat-box">
+        <div class="box-title">🟢 Online</div>
+        <div class="stat-value">{{ summary.online }}</div>
+        <div class="stat-label">erreichbar</div>
+    </div>
+    <div class="box stat-box">
+        <div class="box-title">🔴 Offline</div>
+        <div class="stat-value">{{ summary.offline }}</div>
+        <div class="stat-label">nicht erreichbar</div>
+    </div>
+    <div class="box stat-box">
+        <div class="box-title">⚡ PLC</div>
+        <div class="stat-value">{{ summary.plc }}</div>
+        <div class="stat-label">Powerline-Verbindungen</div>
+    </div>
 </div>
 
-{% if offline %}
-<div class="box">
-    <div class="box-title">Offline</div>
-    <table>
-        <thead><tr><th>Gerät</th><th>Modell</th><th>IP</th><th>Beschreibung</th></tr></thead>
-        <tbody>
-        {% for node in offline %}
-        <tr><td>{{ node.device_name }}</td><td>{{ node.device_model }}</td><td><code>{{ node.ip or "-" }}</code></td><td>{{ node.description }}</td></tr>
-        {% endfor %}
-        </tbody>
-    </table>
+{% if master %}
+<div class="master-card">
+    <div class="master-icon" aria-hidden="true">📡</div>
+    <div>
+        <div class="master-name">{{ master.device_name | upper }}</div>
+        <div class="master-meta">
+            {{ master.device_model }}
+            {% if master.ip %} · <code>{{ master.ip }}</code>{% endif %}
+            · {% if master.online %}🟢 online{% else %}🔴 offline{% endif %}
+        </div>
+    </div>
 </div>
 {% endif %}
 
-<div class="box">
-    <div class="box-title">Links</div>
-    <table>
-        <thead><tr><th>A</th><th>B</th><th>Typ</th><th>Interface</th><th>Status</th><th>RX/TX</th></tr></thead>
-        <tbody>
-        {% for link in links %}
-        <tr><td><code>{{ link.node_a_uid[:12] }}</code></td><td><code>{{ link.node_b_uid[:12] }}</code></td><td>{{ link.interface_type }}</td><td>{{ link.interface_name }}</td><td>{{ link.state }}</td><td>{{ link.rx_kbps or "-" }} / {{ link.tx_kbps or "-" }}</td></tr>
-        {% endfor %}
-        </tbody>
-    </table>
+<div class="box topology-box">
+    <div class="box-title">Geräte</div>
+    {% for row in rows %}
+    {% if not row.is_master %}
+    <div class="tree-row{% if not row.node.online %} offline{% endif %}">
+        <span class="tree-branch" aria-hidden="true">{{ row.prefix }}{{ row.branch }}</span>
+        <div class="tree-main">
+            {% if row.connection_label %}
+            <span class="chip {{ row.connection_class }}">
+                <span aria-hidden="true">{{ row.connection_icon }}</span> {{ row.connection_label }}
+            </span>
+            {% endif %}
+            <span class="tree-name">{{ row.node.device_name }}</span>
+            {% if row.role_label %}<span class="chip role-chip">{{ row.role_label }}</span>{% endif %}
+            {% if row.plc_label %}
+            <span class="plc {{ row.plc_class }}">
+                <span aria-hidden="true">{{ row.plc_icon }}</span> {{ row.plc_label }}
+            </span>
+            {% endif %}
+            <span class="tree-model">{{ row.node.device_model }}</span>
+            {% if row.node.ip %}<code class="tree-ip">{{ row.node.ip }}</code>{% endif %}
+            {% if row.node.description %}<span class="tree-desc">{{ row.node.description }}</span>{% endif %}
+        </div>
+    </div>
+    {% endif %}
+    {% endfor %}
 </div>
+
+{% if offline_rows %}
+<div class="box">
+    <div class="box-title">Offline</div>
+    {% for row in offline_rows %}
+    <div class="tree-row offline">
+        <span class="tree-branch" aria-hidden="true">{{ row.prefix }}{{ row.branch }}</span>
+        <div class="tree-main">
+            <span class="tree-name">{{ row.node.device_name }}</span>
+            {% if row.role_label %}<span class="chip role-chip">{{ row.role_label }}</span>{% endif %}
+            <span class="tree-model">{{ row.node.device_model }}</span>
+            {% if row.node.ip %}<code class="tree-ip">{{ row.node.ip }}</code>{% endif %}
+            {% if row.node.description %}<span class="tree-desc">{{ row.node.description }}</span>{% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
 {% endif %}
 {% endblock %}

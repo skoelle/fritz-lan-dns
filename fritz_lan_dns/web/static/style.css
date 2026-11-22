@@ -150,7 +150,85 @@ button:disabled { opacity: 0.6; cursor: wait; }
 .empty { color: var(--muted); padding: 1rem 0; }
 .error-text { color: var(--red); font-size: 0.8rem; }
 
+
+.master-card {
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+    background: linear-gradient(135deg, #ffffff, #eef5ff);
+    border: 1px solid #d9e6f8;
+    border-radius: 8px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1rem;
+    box-shadow: var(--shadow);
+}
+
+.master-icon { font-size: 2rem; line-height: 1; }
+.master-name { font-size: 1.15rem; font-weight: 700; color: #1f2d3d; letter-spacing: 0.02em; }
+.master-meta { color: var(--muted); font-size: 0.85rem; }
+
+.topology-summary { margin-bottom: 1rem; }
+.topology-box { padding-top: 0.9rem; }
+
+.tree-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.55rem;
+    padding: 0.45rem 0.25rem;
+    border-bottom: 1px solid #eeeeee;
+}
+.tree-row:last-child { border-bottom: 0; }
+.tree-row:hover { background: #fafafa; }
+.tree-row.offline { opacity: 0.6; }
+.tree-row.offline .tree-name { color: #777; }
+
+.tree-branch {
+    flex: 0 0 auto;
+    min-width: 2.2rem;
+    color: #b5b5b5;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    white-space: pre;
+}
+
+.tree-main {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem 0.6rem;
+    min-width: 0;
+}
+.tree-name { font-weight: 600; color: #222; }
+.tree-model { color: var(--muted); font-size: 0.8rem; }
+.tree-ip { font-size: 0.8rem; }
+.tree-desc { color: var(--muted); font-size: 0.8rem; }
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    padding: 0.1rem 0.45rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    white-space: nowrap;
+    background: #eeeeee;
+    color: #555555;
+}
+.chip.lan { background: #e8f1ff; color: #1d4f91; }
+.chip.wlan { background: #f3e8ff; color: #6b3fa0; }
+.chip.plc { background: #fff4d6; color: #8a5a00; }
+.chip.role-chip { background: #f1f1f1; color: #555555; font-weight: 500; }
+
+.plc { font-size: 0.78rem; font-weight: 600; white-space: nowrap; }
+.plc.ok { color: var(--green); }
+.plc.slow { color: var(--yellow); }
+.plc.offline { color: var(--red); }
+
 @media (max-width: 760px) {
     .stat-grid { grid-template-columns: repeat(2, 1fr); }
     .header { align-items: flex-start; }
+    .tree-branch { min-width: 1.6rem; }
+    .tree-model { display: none; }
 }

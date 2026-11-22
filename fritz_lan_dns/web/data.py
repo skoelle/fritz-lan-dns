@@ -7,6 +7,47 @@ from .. import db
 from ..config import Settings
 from ..models import MeshNode
 
+_CONNECTION_META = {
+    "LAN": ("🔌", "LAN", "lan"),
+    "PLC": ("⚡", "PLC", "plc"),
+    "WLAN": ("📶", "WLAN", "wlan"),
+    "WLAN 2G": ("📶", "WLAN 2G", "wlan"),
+    "WLAN 5G": ("📶", "WLAN 5G", "wlan"),
+    "WLAN 6G": ("📶", "WLAN 6G", "wlan"),
+}
+
+
+def display_role(role: str | None) -> str:
+    value = (role or "").strip()
+    if value.lower() in {"", "unknown", "client", "none"}:
+        return ""
+    if value.lower() in {"master", "repeater"}:
+        return value.capitalize()
+    return value[:1].upper() + value[1:]
+
+
+def connection_meta(connection_type: str | None) -> tuple[str, str, str]:
+    value = (connection_type or "").strip().upper()
+    return _CONNECTION_META.get(value, ("", "", ""))
+
+
+def format_kbps(value: int | None) -> str:
+    if value is None:
+        return "-"
+    return f"{value / 1000:.1f}"
+
+
+def plc_display(rx_kbps: int | None, tx_kbps: int | None) -> dict[str, str]:
+    if rx_kbps is None and tx_kbps is None:
+        return {"label": "", "icon": "", "css": ""}
+    label = f"{format_kbps(rx_kbps)} / {format_kbps(tx_kbps)} Mbit/s"
+    values = [value for value in (rx_kbps, tx_kbps) if value is not None]
+    if not values or max(values) <= 0:
+        return {"label": label, "icon": "❌", "css": "offline"}
+    if min(values) < 50000:
+        return {"label": label, "icon": "🟡", "css": "slow"}
+    return {"label": label, "icon": "🟢", "css": "ok"}
+
 
 def dashboard(conn: sqlite3.Connection, settings: Settings) -> dict:
     latest = db.latest_snapshot(conn)
@@ -29,10 +70,40 @@ def dashboard(conn: sqlite3.Connection, settings: Settings) -> dict:
     }
 
 
+def _tree_row(node: MeshNode, depth: int, prefix: str, branch: str, is_master: bool) -> dict:
+    icon, label, css = connection_meta(node.connection_type)
+    plc = plc_display(node.plc_rx_kbps, node.plc_tx_kbps)
+    return {
+        "depth": depth,
+        "node": node,
+        "prefix": prefix,
+        "branch": branch,
+        "is_master": is_master,
+        "role_label": display_role(node.mesh_role),
+        "connection_icon": icon,
+        "connection_label": label,
+        "connection_class": css,
+        "plc_label": plc["label"],
+        "plc_icon": plc["icon"],
+        "plc_class": plc["css"],
+        "online_label": "🟢 online" if node.online else "🔴 offline",
+    }
+
+
 def topology(conn: sqlite3.Connection) -> dict:
     latest = db.latest_snapshot(conn)
     if latest is None:
-        return {"latest": None, "rows": [], "offline": [], "links": [], "master": None}
+        return {
+            "latest": None,
+            "rows": [],
+            "offline": [],
+            "offline_rows": [],
+            "online": [],
+            "links": [],
+            "master": None,
+            "summary": {"total": 0, "online": 0, "offline": 0, "plc": 0},
+        }
+
     nodes = db.nodes_for_snapshot(conn, latest["id"])
     links = db.links_for_snapshot(conn, latest["id"])
     by_uid = {node.uid: node for node in nodes}
@@ -46,42 +117,53 @@ def topology(conn: sqlite3.Connection) -> dict:
     rows: list[dict] = []
     visited: set[str] = set()
 
-    def walk(uid: str, depth: int) -> None:
+    def walk(uid: str, depth: int, prefix: str, branch: str, is_master: bool, is_last: bool) -> None:
         node = by_uid.get(uid)
         if node is None or uid in visited:
             return
         visited.add(uid)
-        rows.append(
-            {
-                "depth": depth,
-                "node": node,
-                "children": len(children.get(uid, [])),
-            }
-        )
-        for child in children.get(uid, []):
-            walk(child.uid, depth + 1)
+        rows.append(_tree_row(node, depth, prefix, branch, is_master))
+        child_nodes = [child for child in children.get(uid, []) if child.uid not in visited]
+        for index, child in enumerate(child_nodes):
+            child_last = index == len(child_nodes) - 1
+            child_prefix = prefix + ("   " if is_last else "│  ")
+            if depth == 0:
+                child_prefix = ""
+            walk(
+                child.uid,
+                depth + 1,
+                child_prefix,
+                "└─" if child_last else "├─",
+                False,
+                child_last,
+            )
 
-    master_uid = latest.get("master_uid")
-    if not master_uid:
-        master_uid = next(
-            (node.uid for node in nodes if node.mesh_role.lower() == "master"),
-            None,
-        )
-    if master_uid:
-        walk(master_uid, 0)
-    for node in nodes:
-        if node.uid not in visited:
-            walk(node.uid, 0)
+    master_uid = next(
+        (node.uid for node in nodes if node.mesh_role.lower() == "master"),
+        None,
+    )
+    root_uid = master_uid or (nodes[0].uid if nodes else None)
+    if root_uid:
+        walk(root_uid, 0, "", "", root_uid == master_uid, True)
 
-    offline = [node for node in nodes if not node.online]
-    online = [node for node in nodes if node.online]
+    offline = [node for node in nodes if not node.online or node.uid not in visited]
+    offline.sort(key=lambda node: (node.device_name.lower(), node.uid))
+    online = [node for node in nodes if node.online and node.uid in visited]
+    summary = {
+        "total": len(nodes),
+        "online": len(online),
+        "offline": len(offline),
+        "plc": sum(1 for node in nodes if (node.connection_type or "").upper() == "PLC"),
+    }
     return {
         "latest": latest,
         "rows": rows,
         "offline": offline,
+        "offline_rows": [_tree_row(node, 0, "", "🔴", False) for node in offline],
         "online": online,
         "links": links,
         "master": by_uid.get(master_uid) if master_uid else None,
+        "summary": summary,
     }
 
 

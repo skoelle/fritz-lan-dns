@@ -110,6 +110,19 @@ def test_web_data_topology_hosts_and_dns(tmp_path: Path) -> None:
         assert topology["master"] is not None
         assert topology["master"].device_name == "router"
         assert len(topology["offline"]) == 1
+        assert topology["summary"] == {"total": 5, "online": 4, "offline": 1, "plc": 1}
+
+        rows_by_name = {row["node"].device_name: row for row in topology["rows"]}
+        assert rows_by_name["router"]["is_master"] is True
+        assert rows_by_name["repeater"]["connection_icon"] == "🔌"
+        assert rows_by_name["repeater"]["connection_label"] == "LAN"
+        assert rows_by_name["repeater"]["role_label"] == "Repeater"
+        assert rows_by_name["client"]["role_label"] == ""
+        assert rows_by_name["powerline"]["plc_label"] == "180.0 / 200.0 Mbit/s"
+        assert rows_by_name["powerline"]["plc_class"] == "ok"
+        assert rows_by_name["powerline"]["prefix"] == "   "
+        assert rows_by_name["powerline"]["branch"] == "└─"
+        assert topology["offline_rows"][0]["role_label"] == ""
 
         host_rows = web_data.hosts(conn, query="printer", status="active")
         assert len(host_rows) == 1

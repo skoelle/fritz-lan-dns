@@ -112,7 +112,7 @@
       "uid": "uuid-offline",
       "device_name": "offline",
       "device_model": "Unknown",
-      "mesh_role": "client",
+      "mesh_role": "unknown",
       "ip_addresses": [{"version": "V4", "value": "192.0.2.40/24"}],
       "node_interfaces": []
     }
