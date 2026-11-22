@@ -15,6 +15,11 @@ Client -> Pi-hole (<pve-ip>:53)
                         └── bei MISS: foo.<dns-domain> -> foo. -> FRITZ!Box
 ```
 
+CoreDNS beantwortet ausschließlich `<dns-domain>`. Anfragen für andere Namen
+(z. B. `google.com`) werden mit `REFUSED` beantwortet; der Container ist damit
+kein offener Resolver. Die Antworten der Stufe 2 werden auf den ursprünglichen
+Owner-Namen `foo.<dns-domain>.` zurückgeschrieben.
+
 ## Funktionen
 
 - Stündlicher Abruf per eingebautem Scheduler
@@ -24,7 +29,8 @@ Client -> Pi-hole (<pve-ip>:53)
 - DNS-Records aus Hostnamen und IPs, inkl. Konflikt-Erkennung
 - `dns/hosts` für CoreDNS, `dns/<dns-domain>.zone` als Export
 - MISS-Fallback: unbekannte `foo.<dns-domain>` werden als `foo.` an die
-  FRITZ!Box gefragt
+  FRITZ!Box gefragt; Antworten werden auf `foo.<dns-domain>.` zurückgeschrieben
+- Miss-Logging: jede Anfrage an Stufe 2 landet mit Name, Typ und RCODE auf stdout
 - Manueller Refresh im Webinterface
 - Keine externen JS-/CSS-Abhängigkeiten
 
@@ -67,9 +73,6 @@ DNS_DOMAIN=example.test
 DNS_ZONE_TTL=60
 DNS_INCLUDE_IPV6=0
 DNS_HOST_RETENTION_DAYS=90
-
-# Pi-hole (primärer LAN-DNS)
-DNS_PRIMARY_UPSTREAM=192.0.2.2:53
 
 # MISS-Fallback direkt zur FRITZ!Box
 DNS_FALLBACK_ENABLED=1
@@ -203,7 +206,11 @@ MISS innerhalb der lokalen Domain greift der zweite Server-Block:
 foo.<dns-domain> -> rewrite -> foo. -> FRITZ!Box <fritzbox-ip>:53
 ```
 
-Die Antwort wird unter dem ursprünglichen Namen an den Client zurückgegeben.
+Die Antwort wird per `answer name` wieder auf den ursprünglichen Owner-Namen
+`foo.<dns-domain>.` zurückgeschrieben. Ohne diese Rückumschreibung würde die
+Antwort `foo.` als Owner tragen; viele Resolver (u. a. dnsmasq in Pi-hole)
+verwerfen eine solche Abweichung zwischen Frage und Antwort.
+
 Voraussetzung ist, dass die FRITZ!Box nackte Hostnamen per DNS beantwortet:
 
 ```bash
@@ -211,7 +218,63 @@ dig @<fritzbox-ip> foo
 ```
 
 Wenn das nicht funktioniert, kann `DNS_FALLBACK_MODE=fritz.box` verwendet
+werden. Dann fragt CoreDNS `foo.fritz.box.` und schreibt die Antwort ebenfalls
+auf `foo.<dns-domain>.` zurück.
+
+Bekannte Hosts aus `dns/hosts` beantworten nur die Typen, die dort stehen
+(A und optional AAAA). Bei einem bekannten Host mit nur einem A-Record liefert
+eine AAAA-Anfrage `NOERROR` mit leerer Antwort (NODATA) und wird **nicht** an
+die FRITZ!Box weitergereicht. Das übernimmt das `hosts`-Plugin in CoreDNS
+1.12.1 (Fallthrough nur bei NXDOMAIN).
+
+## Miss-Logging
+
+Der zweite Block loggt jede Anfrage, die dort ankommt, auf stdout:
+
+```text
+log . "{name} {type} {rcode}"
+```
+
+`{name}` ist der ursprüngliche Name (`foo.<dns-domain>.`), `{rcode}` der
+RCODE der FRITZ!Box-Antwort. `NXDOMAIN` bedeutet, die FRITZ!Box kennt den
+Namen nicht; `NOERROR` bedeutet, sie hat geantwortet (Treffer oder NODATA),
+der Cache aber nicht.
+
+Die Zeilen landen im Docker-Log des `coredns`-Containers. Empfohlen ist der
+Standard-Logging-Driver `json-file` mit Rotation (im Compose-Beispiel gesetzt);
+lesen lässt sich das mit:
+
+```bash
+docker compose logs -f coredns
+```
+
+Bewusst wird **kein** Docker-Socket in den Web-Container gemountet: Das wäre
+eine zusätzliche Privilegien-/Angriffsfläche. Wer die Misses zentral sammeln
+will, kann stattdessen einen Logging-Driver (z. B. Loki, Fluentd) konfigurieren.
+
+## Privacy notes
+
+Unbekannte Namen werden in Stufe 2 als nackte Single-Label-Namen (`foo.`) an die
+FRITZ!Box geschickt. Ob die FRITZ!Box solche Namen an ihren externen Upstream
+weiterreicht, ist nicht pauschal garantiert und muss pro Installation geprüft
 werden.
+
+Test (auf dem Docker-Host ausführen, nicht aus dieser Dev-VM):
+
+```bash
+dig @<docker-host> zzz-leaktest-12345.<dns-domain>
+sudo tcpdump -ni any port 53 and not host 127.0.0.1
+```
+
+Zusätzlich im Pi-hole-Log bzw. auf dem Upstream der FRITZ!Box prüfen, ob
+`zzz-leaktest-12345` dort ankommt.
+
+Status: **unverifiziert**. Dieser Test benötigt Zugriff auf das echte LAN und
+die FRITZ!Box und wurde im Rahmen der Umstellung nicht ausgeführt. Falls sich
+ein Leck zeigt, wäre ein Allowlist-Schutz möglich (Stufe 2 nur für bereits
+bekannte Namen aus dem letzten Sync). Das würde allerdings die Live-Erkennung
+neuer, noch nicht gecachter Hosts abschalten und ist daher eine bewusste
+Abwägung.
 
 ## Webinterface
 

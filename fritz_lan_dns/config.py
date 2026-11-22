@@ -93,7 +93,6 @@ class Settings:
     dns_domain: str
     dns_zone_ttl: int
     dns_include_ipv6: bool
-    dns_primary_upstream: str
     dns_fallback_enabled: bool
     dns_fallback_mode: str
     dns_fallback_upstream: str
@@ -148,8 +147,6 @@ class Settings:
         missing = []
         if not self.dns_domain:
             missing.append("DNS_DOMAIN")
-        if not self.dns_primary_upstream:
-            missing.append("DNS_PRIMARY_UPSTREAM")
         if self.dns_fallback_enabled and not self.dns_fallback_upstream:
             missing.append("DNS_FALLBACK_UPSTREAM")
         if missing:
@@ -187,7 +184,6 @@ def build_settings(env_file: Path | None = None) -> Settings:
         dns_domain=(_env("DNS_DOMAIN") or "").strip("."),
         dns_zone_ttl=_env_int("DNS_ZONE_TTL", 60),
         dns_include_ipv6=_env_bool("DNS_INCLUDE_IPV6", False),
-        dns_primary_upstream=_env("DNS_PRIMARY_UPSTREAM") or "",
         dns_fallback_enabled=_env_bool("DNS_FALLBACK_ENABLED", True),
         dns_fallback_mode=(_env("DNS_FALLBACK_MODE") or "bare").lower(),
         dns_fallback_upstream=_env("DNS_FALLBACK_UPSTREAM")

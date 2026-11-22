@@ -94,8 +94,23 @@ def test_corefile_fallback_and_disabled(tmp_path) -> None:
     settings = make_settings(tmp_path)
     enabled = corefile_content(settings)
     assert "example.test:53" in enabled
-    assert "rewrite name regex" in enabled
+    assert "name regex ^([^.]+)\\.example\\.test\\.$ {1}." in enabled
+    assert "answer name ^([^.]+)\\.$ {1}.example.test." in enabled
+    assert 'log . "{name} {type} {rcode}"' in enabled
     assert "forward . 127.0.0.1:5354" in enabled
+    assert ".:53 {" not in enabled
+    assert "health :8080" in enabled
+    assert "ready :8181" in enabled
+
     disabled = corefile_content(replace(settings, dns_fallback_enabled=False))
-    assert "rewrite name regex" not in disabled
+    assert "name regex" not in disabled
+    assert "answer name" not in disabled
     assert "fallthrough" not in disabled
+    assert ".:53 {" not in disabled
+
+
+def test_corefile_fritz_box_answer_rewrite(tmp_path) -> None:
+    settings = make_settings(tmp_path, dns_fallback_mode="fritz.box")
+    corefile = corefile_content(settings)
+    assert "name regex ^([^.]+)\\.example\\.test\\.$ {1}.fritz.box." in corefile
+    assert "answer name ^([^.]+)\\.fritz\\.box\\.$ {1}.example.test." in corefile

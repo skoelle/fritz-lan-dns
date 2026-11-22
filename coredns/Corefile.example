@@ -1,9 +1,16 @@
 # Example Corefile for manual use.
 # The app generates dns/Corefile automatically from the .env values.
 # This example uses the reserved test domain and documentation IPs.
+#
+# CoreDNS only answers the local domain; everything else is refused, so the
+# container is not an open resolver. Known hosts come from the hosts file,
+# misses are rewritten to bare names and forwarded to the FRITZ!Box.
 
 example.test:53 {
     errors
+    reload 30s
+    health :8080
+    ready :8181
     hosts /zones/hosts example.test {
         ttl 60
         reload 5s
@@ -14,18 +21,13 @@ example.test:53 {
     cache 30
 }
 
-.:53 {
-    errors
-    reload 30s
-    health :8080
-    ready :8181
-    forward . 192.0.2.2:53
-    cache 30
-}
-
 .:5354 {
     bind 127.0.0.1
     errors
-    rewrite name regex ^([^.]+)\.example\.test\.$ {1}.
+    log . "{name} {type} {rcode}"
+    rewrite stop {
+        name regex ^([^.]+)\.example\.test\.$ {1}.
+        answer name ^([^.]+)\.$ {1}.example.test.
+    }
     forward . 192.0.2.1:53
 }

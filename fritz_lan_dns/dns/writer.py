@@ -74,11 +74,16 @@ def corefile_content(settings: Settings) -> str:
     if settings.dns_fallback_enabled:
         if settings.dns_fallback_mode == "fritz.box":
             replacement = "{1}.fritz.box."
+            answer_pattern = r"^([^.]+)\.fritz\.box\.$"
         else:
             replacement = "{1}."
+            answer_pattern = r"^([^.]+)\.$"
         fallback = [
             f"{domain}:53 {{",
             "    errors",
+            "    reload 30s",
+            "    health :8080",
+            "    ready :8181",
             f"    hosts {hosts_path} {domain} {{",
             f"        ttl {ttl}",
             "        reload 5s",
@@ -89,19 +94,14 @@ def corefile_content(settings: Settings) -> str:
             "    cache 30",
             "}",
             "",
-            ".:53 {",
-            "    errors",
-            "    reload 30s",
-            "    health :8080",
-            "    ready :8181",
-            f"    forward . {settings.dns_primary_upstream}",
-            "    cache 30",
-            "}",
-            "",
             ".:5354 {",
             "    bind 127.0.0.1",
             "    errors",
-            f"    rewrite name regex ^([^.]+)\\.{escaped_domain}\\.$ {replacement}",
+            '    log . "{name} {type} {rcode}"',
+            "    rewrite stop {",
+            f"        name regex ^([^.]+)\\.{escaped_domain}\\.$ {replacement}",
+            f"        answer name {answer_pattern} {{1}}.{domain}.",
+            "    }",
             f"    forward . {settings.dns_fallback_upstream}",
             "}",
         ]
@@ -110,20 +110,14 @@ def corefile_content(settings: Settings) -> str:
     disabled = [
         f"{domain}:53 {{",
         "    errors",
+        "    reload 30s",
+        "    health :8080",
+        "    ready :8181",
         f"    hosts {hosts_path} {domain} {{",
         f"        ttl {ttl}",
         "        reload 5s",
         "        no_reverse",
         "    }",
-        "}",
-        "",
-        ".:53 {",
-        "    errors",
-        "    reload 30s",
-        "    health :8080",
-        "    ready :8181",
-        f"    forward . {settings.dns_primary_upstream}",
-        "    cache 30",
         "}",
     ]
     return "\n".join(head + disabled) + "\n"

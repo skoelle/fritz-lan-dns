@@ -31,7 +31,6 @@ def make_settings(tmp_path: Path, **overrides) -> Settings:
         "dns_domain": "example.test",
         "dns_zone_ttl": 60,
         "dns_include_ipv6": False,
-        "dns_primary_upstream": "192.0.2.2:53",
         "dns_fallback_enabled": True,
         "dns_fallback_mode": "bare",
         "dns_fallback_upstream": "192.0.2.1:53",

@@ -10,14 +10,12 @@ def test_require_dns_reports_missing_values(tmp_path) -> None:
     settings = make_settings(
         tmp_path,
         dns_domain="",
-        dns_primary_upstream="",
         dns_fallback_upstream="",
     )
     with pytest.raises(ConfigError) as exc:
         settings.require_dns()
     message = str(exc.value)
     assert "DNS_DOMAIN" in message
-    assert "DNS_PRIMARY_UPSTREAM" in message
     assert "DNS_FALLBACK_UPSTREAM" in message
 
 
@@ -46,7 +44,6 @@ def test_build_settings_has_no_private_defaults(tmp_path, monkeypatch) -> None:
         "BoxPW",
         "BOX_PW",
         "DNS_DOMAIN",
-        "DNS_PRIMARY_UPSTREAM",
         "DNS_FALLBACK_UPSTREAM",
     ):
         monkeypatch.delenv(key, raising=False)
@@ -55,5 +52,4 @@ def test_build_settings_has_no_private_defaults(tmp_path, monkeypatch) -> None:
     assert settings.box_user == ""
     assert settings.box_pw == ""
     assert settings.dns_domain == ""
-    assert settings.dns_primary_upstream == ""
     assert settings.dns_fallback_upstream == ""

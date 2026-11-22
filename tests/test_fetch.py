@@ -59,7 +59,7 @@ def test_run_fetch_end_to_end(tmp_path: Path, monkeypatch) -> None:
     assert legacy.exists()
     assert "printer.example.test" in settings.hosts_file.read_text(encoding="utf-8")
     assert "router.example.test" in settings.hosts_file.read_text(encoding="utf-8")
-    assert "rewrite name regex" in settings.corefile.read_text(encoding="utf-8")
+    assert "answer name" in settings.corefile.read_text(encoding="utf-8")
 
     with db.connect(settings.db_path) as conn:
         latest = db.latest_snapshot(conn)

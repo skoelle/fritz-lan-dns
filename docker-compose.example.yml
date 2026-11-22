@@ -49,6 +49,14 @@ services:
     ports:
       - "53:53/udp"
       - "53:53/tcp"
+    # Misses are logged to stdout and can be read with
+    #   docker compose logs coredns
+    # Rotation keeps the json-file logs bounded.
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
     depends_on:
       fritz-lan-dns:
         condition: service_healthy
