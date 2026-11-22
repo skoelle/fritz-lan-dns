@@ -7,7 +7,7 @@ from collections import defaultdict
 from .. import db
 from ..config import Settings
 from ..models import MeshNode
-from ..util import http_url, source_label
+from ..util import http_url, source_filter_values, source_label
 
 _CONNECTION_META = {
     "LAN": ("🔌", "LAN", "lan"),
@@ -204,9 +204,11 @@ def hosts(
         clauses.append("active = 1")
     elif status == "inactive":
         clauses.append("active = 0")
-    if source:
-        clauses.append("source = ?")
-        params.append(source)
+    source_values = source_filter_values(source)
+    if source_values:
+        placeholders = ", ".join("?" for _ in source_values)
+        clauses.append(f"source IN ({placeholders})")
+        params.extend(source_values)
     where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
     rows = conn.execute(
         f"""

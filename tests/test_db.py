@@ -188,6 +188,30 @@ def test_dns_source_roundtrip_and_filter(tmp_path: Path) -> None:
         assert rows[0]["source_label"] == "OpenWrt"
 
 
+def test_hosts_source_filter_groups_mesh_as_fritz(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    db.init_schema(settings.db_path)
+    mesh_host = HostRecord(
+        key="mesh:abc",
+        hostname="mesh-only",
+        ip="192.0.2.170",
+        mac=None,
+        active=True,
+        source="mesh",
+        last_seen=iso_now(),
+    )
+    with db.connect(settings.db_path) as conn:
+        _store(conn, _mesh(), [_host("printer", "192.0.2.50"), mesh_host])
+
+        rows = web_data.hosts(conn, source="fritz")
+        names = {row["hostname"] for row in rows}
+        assert names == {"printer", "mesh-only"}
+        assert {row["source_label"] for row in rows} == {"FritzBox"}
+
+        openwrt_rows = web_data.hosts(conn, source="openwrt")
+        assert openwrt_rows == []
+
+
 def test_init_schema_migrates_dns_source(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     settings.db_path.parent.mkdir(parents=True, exist_ok=True)

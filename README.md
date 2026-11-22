@@ -306,8 +306,9 @@ Verwendet werden:
 
 Die Hosts werden über die MAC mit den FRITZ!Box-Daten zusammengeführt und
 erscheinen unter derselben `DNS_DOMAIN` in `/hosts` und im DNS. In der
-Oberfläche zeigt die Spalte „Quelle“ den Ursprung (`FritzBox`, `OpenWrt`,
-`FritzBox Mesh`); die Hosts-Seite hat zusätzlich einen Quellen-Filter.
+Oberfläche zeigt die Spalte „Quelle“ den Ursprung (`FritzBox`, `OpenWrt`);
+Hosts, die nur über die FRITZ!Box-Mesh-Topologie bekannt sind, zählen dort zur
+Quelle `FritzBox`. Die Hosts-Seite hat zusätzlich einen Quellen-Filter.
 Schlägt der OpenWrt-Abruf fehl, bleibt der FRITZ!Box-Abruf erfolgreich und der
 Fehler wird als Warnung im Snapshot vermerkt.
 

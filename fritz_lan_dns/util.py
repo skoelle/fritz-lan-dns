@@ -40,15 +40,24 @@ def http_url(ip: str | None) -> str | None:
 
 SOURCE_LABELS = {
     "fritz": "FritzBox",
-    "mesh": "FritzBox Mesh",
+    "mesh": "FritzBox",
     "openwrt": "OpenWrt",
     "static": "Statisch",
+}
+
+SOURCE_FILTER_GROUPS = {
+    "fritz": ("fritz", "mesh"),
 }
 
 
 def source_label(source: str | None) -> str:
     value = (source or "").strip().lower()
     return SOURCE_LABELS.get(value, source or "-")
+
+
+def source_filter_values(source: str | None) -> tuple[str, ...]:
+    value = (source or "").strip().lower()
+    return SOURCE_FILTER_GROUPS.get(value, (value,) if value else ())
 
 
 def load_device_names(path: Path) -> dict[str, str]:

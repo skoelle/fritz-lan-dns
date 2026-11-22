@@ -6,7 +6,7 @@ from tests.helpers import make_settings
 from fritz_lan_dns.dns.records import build_dns_records
 from fritz_lan_dns.dns.writer import corefile_content, hosts_file_content, zone_content
 from fritz_lan_dns.models import HostRecord
-from fritz_lan_dns.util import sanitize_hostname
+from fritz_lan_dns.util import sanitize_hostname, source_label
 
 
 def _host(hostname: str, ip: str, *, active: bool = True, mac: str = "", source: str = "fritz") -> HostRecord:
@@ -27,6 +27,13 @@ def test_sanitize_hostname() -> None:
     assert sanitize_hostname("xxx.example.test", "example.test") == "xxx"
     assert sanitize_hostname("", "example.test") is None
     assert sanitize_hostname("localhost", "example.test") is None
+
+
+def test_source_label_merges_mesh_into_fritz() -> None:
+    assert source_label("fritz") == "FritzBox"
+    assert source_label("mesh") == "FritzBox"
+    assert source_label("openwrt") == "OpenWrt"
+    assert source_label("") == "-"
 
 
 def test_build_records_active_stale_and_conflicts() -> None:
