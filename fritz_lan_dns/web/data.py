@@ -151,20 +151,16 @@ def topology(conn: sqlite3.Connection) -> dict:
         visited.add(root_uid)
         rows.append(_table_row(root, 0, root_uid == master_uid))
 
-        direct = sorted(children.get(root_uid, []), key=_name_key)
-        direct_uids = {node.uid for node in direct}
-        for node in direct:
-            if node.uid in visited:
-                continue
-            visited.add(node.uid)
-            rows.append(_table_row(node, 1, False))
-
+        direct = sorted(
+            (node for node in children.get(root_uid, []) if node.mesh_role.lower() != "slave"),
+            key=_name_key,
+        )
         slaves = sorted(
-            (node for node in nodes if node.parent_uid in direct_uids),
+            (node for node in children.get(root_uid, []) if node.mesh_role.lower() == "slave"),
             key=_ip_key,
         )
-        for node in slaves:
-            walk(node.uid, 2, False)
+        for node in (*direct, *slaves):
+            walk(node.uid, 1, False)
 
     offline = [node for node in nodes if not node.online or node.uid not in visited]
     offline.sort(key=lambda node: (node.device_name.lower(), node.uid))

@@ -160,18 +160,19 @@ def test_web_data_topology_hosts_and_dns(tmp_path: Path) -> None:
         assert dashboard["counts"]["nodes"] == len(mesh.nodes)
 
 
-def test_topology_orders_direct_devices_then_slaves_by_ip(tmp_path: Path) -> None:
+def test_topology_groups_direct_devices_then_slaves_by_ip(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
     db.init_schema(settings.db_path)
     nodes = [
         _node("master", "router", "192.0.2.1", role="master"),
-        _node("zulu", "zulu", "192.0.2.2", parent="master", role="repeater"),
         _node("alpha", "alpha", "192.0.2.50", parent="master"),
         _node("alpha-zeta", "zeta", "192.0.2.60", parent="alpha"),
         _node("alpha-able", "Able", "192.0.2.70", parent="alpha"),
-        _node("zulu-child", "child", "192.0.2.3", parent="zulu"),
-        _node("child-zeta", "zeta", "192.0.2.90", parent="zulu-child"),
-        _node("child-able", "Able", "192.0.2.91", parent="zulu-child"),
+        _node("yankee", "yankee", "192.0.2.80", parent="master"),
+        _node("zulu", "zulu", "192.0.2.2", parent="master", role="slave"),
+        _node("zulu-able", "able-child", "192.0.2.5", parent="zulu"),
+        _node("zulu-zeta", "zeta-child", "192.0.2.6", parent="zulu"),
+        _node("bravo", "bravo", "192.0.2.4", parent="master", role="slave"),
     ]
     mesh = MeshSnapshot(nodes=nodes, links=[], master_uid="master", raw={})
     with db.connect(settings.db_path) as conn:
@@ -179,8 +180,17 @@ def test_topology_orders_direct_devices_then_slaves_by_ip(tmp_path: Path) -> Non
         topology = web_data.topology(conn)
 
     order = [row["node"].device_name for row in topology["rows"] if not row["is_master"]]
-    assert order == ["alpha", "zulu", "child", "Able", "zeta", "zeta", "Able"]
-    assert [row["depth"] for row in topology["rows"]] == [0, 1, 1, 2, 3, 3, 2, 2]
+    assert order == [
+        "alpha",
+        "Able",
+        "zeta",
+        "yankee",
+        "zulu",
+        "able-child",
+        "zeta-child",
+        "bravo",
+    ]
+    assert [row["depth"] for row in topology["rows"]] == [0, 1, 2, 2, 1, 1, 2, 2, 1]
 
 
 def test_http_status_latches_until_disproven(tmp_path: Path) -> None:
