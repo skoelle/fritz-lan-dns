@@ -94,6 +94,11 @@ h2 { font-size: 1.2rem; color: #222; }
 table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 th, td { text-align: left; padding: 0.45rem 0.6rem; border-bottom: 1px solid var(--border); vertical-align: top; }
 th { color: var(--muted); font-weight: 600; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.3px; }
+table[data-sortable] th[role="button"] { cursor: pointer; user-select: none; white-space: nowrap; }
+table[data-sortable] th[role="button"]:hover { color: var(--accent); background: #f5f9ff; }
+th.sort-asc::after, th.sort-desc::after { color: var(--accent); font-size: 0.7em; }
+th.sort-asc::after { content: " \25B2"; }
+th.sort-desc::after { content: " \25BC"; }
 tbody tr:hover { background: #fafafa; }
 tr.offline td { color: #999; }
 tr.conflict td { background: #fff6f5; }
