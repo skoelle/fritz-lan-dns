@@ -627,7 +627,11 @@ def _link_speed(link: MeshLink) -> int:
 
 
 def _openwrt_host_node(
-    host: HostRecord, *, parent_uid: str | None, online: bool
+    host: HostRecord,
+    *,
+    parent_uid: str | None,
+    online: bool,
+    connection_type: str = "",
 ) -> MeshNode:
     return MeshNode(
         uid=f"openwrt:{host.key}",
@@ -638,7 +642,7 @@ def _openwrt_host_node(
         mac=host.mac,
         online=online,
         parent_uid=parent_uid,
-        connection_type="",
+        connection_type=connection_type,
         description=host.description,
         source="openwrt",
     )
@@ -702,7 +706,12 @@ def topology(conn: sqlite3.Connection, settings: Settings) -> dict:
             if host.active:
                 if openwrt_parent is not None:
                     openwrt_children.append(
-                        _openwrt_host_node(host, parent_uid=openwrt_parent.uid, online=True)
+                        _openwrt_host_node(
+                            host,
+                            parent_uid=openwrt_parent.uid,
+                            online=True,
+                            connection_type="LAN",
+                        )
                     )
             else:
                 openwrt_offline.append(
@@ -712,9 +721,12 @@ def topology(conn: sqlite3.Connection, settings: Settings) -> dict:
             openwrt_note = f"OpenWrt-Parent {openwrt_parent_ip} nicht gefunden"
 
     if openwrt_parent is not None:
+        uplink_speed = node_speeds.get(openwrt_parent.uid)
         for node in openwrt_children:
             by_uid[node.uid] = node
             children[openwrt_parent.uid].append(node)
+            if uplink_speed is not None:
+                node_speeds[node.uid] = uplink_speed
 
     rows: list[dict] = []
     visited: set[str] = set()

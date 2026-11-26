@@ -342,10 +342,11 @@ Schlägt der OpenWrt-Abruf fehl, bleibt der FRITZ!Box-Abruf erfolgreich und der
 Fehler wird als Warnung im Snapshot vermerkt.
 
 Mit `OPENWRT_TOPOLOGY_PARENT_IP` werden aktive OpenWrt-Clients als Sub-Nodes
-unter dem Mesh-Gerät mit dieser IP in der Topologie angezeigt. Inaktive
-OpenWrt-Hosts erscheinen zusätzlich in der Offline-Sektion. Die Injection
-passiert beim Rendern aus der aktuellen Host-Tabelle und ist daher nicht in
-historischen Snapshots enthalten.
+unter dem Mesh-Gerät mit dieser IP in der Topologie angezeigt. Sie erscheinen
+als LAN-Verbindung und übernehmen die Uplink-Rate des OpenWrt-Parents als
+Speed. Inaktive OpenWrt-Hosts erscheinen zusätzlich in der Offline-Sektion. Die
+Injection passiert beim Rendern aus der aktuellen Host-Tabelle und ist daher
+nicht in historischen Snapshots enthalten.
 
 Wird dasselbe Gerät (gleiche MAC) von beiden Routern mit unterschiedlichen IPs
 gesehen, bleiben beide als getrennte Host-Zeilen erhalten (Quelle `FritzBox`

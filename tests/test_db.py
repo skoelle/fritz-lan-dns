@@ -10,7 +10,13 @@ from fritz_lan_dns import db
 from fritz_lan_dns.dns import build_dns_records, ensure_dns_files, write_dns_files
 from fritz_lan_dns.fritz.mesh import parse_mesh
 from fritz_lan_dns.fritz.wlan import parse_wlan
-from fritz_lan_dns.models import HostRecord, MeshNode, MeshSnapshot, WlanEvent
+from fritz_lan_dns.models import (
+    HostRecord,
+    MeshLink,
+    MeshNode,
+    MeshSnapshot,
+    WlanEvent,
+)
 from fritz_lan_dns.util import iso_now
 from fritz_lan_dns.web import data as web_data
 from tests.helpers import make_settings
@@ -300,7 +306,18 @@ def test_topology_attaches_openwrt_hosts(tmp_path: Path) -> None:
         _node("master", "router", "192.0.2.1", role="master"),
         _node("parent", "OpenWrt", "192.0.2.80", parent="master"),
     ]
-    mesh = MeshSnapshot(nodes=nodes, links=[], master_uid="master", raw={})
+    links = [
+        MeshLink(
+            node_a_uid="master",
+            node_b_uid="parent",
+            interface_type="LAN",
+            interface_name="lan",
+            state="CONNECTED",
+            rx_kbps=1000000,
+            tx_kbps=1000000,
+        )
+    ]
+    mesh = MeshSnapshot(nodes=nodes, links=links, master_uid="master", raw={})
     active = HostRecord(
         key="mac:ow-active",
         hostname="ow-active",
@@ -329,6 +346,8 @@ def test_topology_attaches_openwrt_hosts(tmp_path: Path) -> None:
     assert child_row["depth"] == parent_row["depth"] + 1
     assert child_row["source"] == "openwrt"
     assert child_row["node"].description == "OpenWrt NAS"
+    assert child_row["connection_label"] == "LAN"
+    assert child_row["speed_label"] == "1 Gbit/s"
     assert "ow-offline" not in rows
 
     offline_names = [row["node"].device_name for row in result["offline_rows"]]
@@ -343,6 +362,41 @@ def test_topology_attaches_openwrt_hosts(tmp_path: Path) -> None:
     assert result["summary"]["total"] == 2
     assert result["summary"]["offline"] == 0
     assert result["openwrt_note"] == ""
+
+
+def test_topology_openwrt_child_without_parent_speed(tmp_path: Path) -> None:
+    settings = _settings(
+        tmp_path,
+        openwrt_enabled=True,
+        openwrt_topology_parent_ip="192.0.2.80",
+    )
+    db.init_schema(settings.db_path)
+    mesh = MeshSnapshot(
+        nodes=[
+            _node("master", "router", "192.0.2.1", role="master"),
+            _node("parent", "OpenWrt", "192.0.2.80", parent="master"),
+        ],
+        links=[],
+        master_uid="master",
+        raw={},
+    )
+    active = HostRecord(
+        key="mac:ow-active",
+        hostname="ow-active",
+        ip="192.0.2.150",
+        mac="aa:bb:cc:99:00:01",
+        active=True,
+        source="openwrt",
+    )
+    with db.connect(settings.db_path) as conn:
+        _store(conn, mesh, [active])
+        result = web_data.topology(conn, settings)
+
+    child_row = next(
+        row for row in result["rows"] if row["node"].device_name == "ow-active"
+    )
+    assert child_row["connection_label"] == "LAN"
+    assert child_row["speed_label"] == ""
 
 
 def test_topology_openwrt_parent_missing(tmp_path: Path) -> None:
