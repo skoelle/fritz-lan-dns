@@ -221,10 +221,10 @@ button:disabled { opacity: 0.6; cursor: wait; }
 .chip.plc { background: #fff4d6; color: #8a5a00; }
 .chip.role-chip { background: #f1f1f1; color: #555555; font-weight: 500; }
 
-.plc { font-size: 0.78rem; font-weight: 600; white-space: nowrap; }
-.plc.ok { color: var(--green); }
-.plc.slow { color: var(--yellow); }
-.plc.offline { color: var(--red); }
+.speed { font-size: 0.78rem; font-weight: 600; white-space: nowrap; }
+.speed.ok { color: var(--green); }
+.speed.slow { color: var(--yellow); }
+.speed.offline { color: var(--red); }
 
 .chip.band-24 { background: #e8f1ff; color: #1d4f91; }
 .chip.band-5 { background: #f3e8ff; color: #6b3fa0; }

@@ -63,7 +63,7 @@
                 <th scope="col">Rolle</th>
                 <th scope="col">Modell</th>
                 <th scope="col">IP</th>
-                <th scope="col">PLC</th>
+                <th scope="col" title="Übertragungsgeschwindigkeit">Speed</th>
                 <th scope="col">Beschreibung</th>
             </tr>
         </thead>
@@ -85,9 +85,9 @@
             <td class="muted-cell">{{ row.node.device_model or "-" }}</td>
             <td>{{ ip_link(row.node.ip, row.node.ip in http_open_ips) }}</td>
             <td>
-                {% if row.plc_label %}
-                <span class="plc {{ row.plc_class }}">
-                    <span aria-hidden="true">{{ row.plc_icon }}</span> {{ row.plc_label }}
+                {% if row.speed_label %}
+                <span class="speed {{ row.speed_class }}">
+                    <span aria-hidden="true">{{ row.speed_icon }}</span> {{ row.speed_label }}
                 </span>
                 {% else %}-{% endif %}
             </td>
@@ -111,7 +111,7 @@
                 <th scope="col">Rolle</th>
                 <th scope="col">Modell</th>
                 <th scope="col">IP</th>
-                <th scope="col">PLC</th>
+                <th scope="col" title="Übertragungsgeschwindigkeit">Speed</th>
                 <th scope="col">Beschreibung</th>
             </tr>
         </thead>
@@ -132,7 +132,13 @@
             <td>{% if row.role_label %}<span class="chip role-chip">{{ row.role_label }}</span>{% endif %}</td>
             <td class="muted-cell">{{ row.node.device_model or "-" }}</td>
             <td>{{ ip_link(row.node.ip, row.node.ip in http_open_ips) }}</td>
-            <td>-</td>
+            <td>
+                {% if row.speed_label %}
+                <span class="speed {{ row.speed_class }}">
+                    <span aria-hidden="true">{{ row.speed_icon }}</span> {{ row.speed_label }}
+                </span>
+                {% else %}-{% endif %}
+            </td>
             <td class="muted-cell">{{ row.node.description or "" }}</td>
         </tr>
         {% endfor %}

@@ -143,8 +143,10 @@ def test_web_data_topology_hosts_and_dns(tmp_path: Path) -> None:
         assert rows_by_name["repeater"]["connection_label"] == "LAN"
         assert rows_by_name["repeater"]["role_label"] == "Repeater"
         assert rows_by_name["client"]["role_label"] == ""
-        assert rows_by_name["powerline"]["plc_label"] == "180.0 / 200.0 Mbit/s"
-        assert rows_by_name["powerline"]["plc_class"] == "ok"
+        assert rows_by_name["repeater"]["speed_label"] == "1000.0 / 1000.0 Mbit/s"
+        assert rows_by_name["client"]["speed_label"] == "866.0 / 866.0 Mbit/s"
+        assert rows_by_name["powerline"]["speed_label"] == "180.0 / 200.0 Mbit/s"
+        assert rows_by_name["powerline"]["speed_class"] == "ok"
         assert rows_by_name["client"]["indent"] == 0
         assert rows_by_name["repeater"]["indent"] == 0
         assert rows_by_name["powerline"]["indent"] == 1

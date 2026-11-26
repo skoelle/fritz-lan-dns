@@ -8,7 +8,7 @@ from datetime import datetime
 from .. import db
 from ..config import Settings
 from ..fritz.events import EVENT_LABELS, SEVERITY_LABELS
-from ..models import HostRecord, MeshNode
+from ..models import HostRecord, MeshLink, MeshNode
 from ..util import (
     format_duration,
     http_url,
@@ -47,7 +47,7 @@ def format_kbps(value: int | None) -> str:
     return f"{value / 1000:.1f}"
 
 
-def plc_display(rx_kbps: int | None, tx_kbps: int | None) -> dict[str, str]:
+def speed_display(rx_kbps: int | None, tx_kbps: int | None) -> dict[str, str]:
     if rx_kbps is None and tx_kbps is None:
         return {"label": "", "icon": "", "css": ""}
     label = f"{format_kbps(rx_kbps)} / {format_kbps(tx_kbps)} Mbit/s"
@@ -552,9 +552,15 @@ def dashboard(conn: sqlite3.Connection, settings: Settings) -> dict:
     }
 
 
-def _table_row(node: MeshNode, depth: int, is_master: bool) -> dict:
+def _table_row(
+    node: MeshNode,
+    depth: int,
+    is_master: bool,
+    speed: tuple[int | None, int | None] | None = None,
+) -> dict:
     icon, label, css = connection_meta(node.connection_type)
-    plc = plc_display(node.plc_rx_kbps, node.plc_tx_kbps)
+    rx_kbps, tx_kbps = speed or (node.plc_rx_kbps, node.plc_tx_kbps)
+    speed_view = speed_display(rx_kbps, tx_kbps)
     return {
         "depth": depth,
         "indent": max(0, depth - 1),
@@ -564,9 +570,9 @@ def _table_row(node: MeshNode, depth: int, is_master: bool) -> dict:
         "connection_icon": icon,
         "connection_label": label,
         "connection_class": css,
-        "plc_label": plc["label"],
-        "plc_icon": plc["icon"],
-        "plc_class": plc["css"],
+        "speed_label": speed_view["label"],
+        "speed_icon": speed_view["icon"],
+        "speed_class": speed_view["css"],
         "online_label": "🟢 online" if node.online else "🔴 offline",
         "source": node.source,
     }
@@ -594,6 +600,13 @@ def _openwrt_parent_ip(settings: Settings) -> str:
     if not settings.openwrt_enabled:
         return ""
     return (settings.openwrt_topology_parent_ip or "").strip()
+
+
+def _link_speed(link: MeshLink) -> int:
+    return max(
+        (value for value in (link.rx_kbps, link.tx_kbps) if value is not None),
+        default=0,
+    )
 
 
 def _openwrt_host_node(
@@ -635,6 +648,21 @@ def topology(conn: sqlite3.Connection, settings: Settings) -> dict:
     nodes = db.nodes_for_snapshot(conn, latest["id"])
     links = db.links_for_snapshot(conn, latest["id"])
     by_uid = {node.uid: node for node in nodes}
+    link_by_pair: dict[frozenset[str], MeshLink] = {}
+    for link in links:
+        if link.state.upper() != "CONNECTED":
+            continue
+        key = frozenset((link.node_a_uid, link.node_b_uid))
+        current = link_by_pair.get(key)
+        if current is None or _link_speed(link) > _link_speed(current):
+            link_by_pair[key] = link
+    node_speeds: dict[str, tuple[int | None, int | None]] = {}
+    for node in nodes:
+        if not node.parent_uid:
+            continue
+        link = link_by_pair.get(frozenset((node.uid, node.parent_uid)))
+        if link is not None:
+            node_speeds[node.uid] = (link.rx_kbps, link.tx_kbps)
     children: dict[str | None, list[MeshNode]] = defaultdict(list)
     for node in nodes:
         parent = node.parent_uid if node.parent_uid in by_uid else None
@@ -679,7 +707,7 @@ def topology(conn: sqlite3.Connection, settings: Settings) -> dict:
         if node is None or uid in visited:
             return
         visited.add(uid)
-        rows.append(_table_row(node, depth, is_master))
+        rows.append(_table_row(node, depth, is_master, node_speeds.get(node.uid)))
         for child in sorted(children.get(uid, []), key=_child_key):
             walk(child.uid, depth + 1, False)
 
@@ -691,7 +719,7 @@ def topology(conn: sqlite3.Connection, settings: Settings) -> dict:
     if root_uid:
         root = by_uid[root_uid]
         visited.add(root_uid)
-        rows.append(_table_row(root, 0, root_uid == master_uid))
+        rows.append(_table_row(root, 0, root_uid == master_uid, node_speeds.get(root_uid)))
 
         direct = sorted(
             (node for node in children.get(root_uid, []) if node.mesh_role.lower() != "slave"),
