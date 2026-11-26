@@ -93,6 +93,20 @@ class WlanSnapshot:
 
 
 @dataclass
+class WlanEvent:
+    event_id: int
+    group: str
+    severity: str
+    node: str
+    channel: str
+    message: str
+    event_at: str
+    first_seen: str | None
+    occurrences: int
+    fingerprint: str
+
+
+@dataclass
 class HostRecord:
     key: str
     hostname: str

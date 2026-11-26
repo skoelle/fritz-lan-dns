@@ -60,6 +60,8 @@ def test_build_settings_has_no_private_defaults(tmp_path, monkeypatch) -> None:
         "FRITZ_REPEATER_USER",
         "FRITZ_REPEATER_PW",
         "FRITZ_REPEATER_TIMEOUT",
+        "FRITZ_EVENTLOG_ENABLED",
+        "EVENT_RETENTION_DAYS",
     ):
         monkeypatch.delenv(key, raising=False)
     settings = build_settings(env_file=tmp_path / "missing.env")
@@ -77,6 +79,8 @@ def test_build_settings_has_no_private_defaults(tmp_path, monkeypatch) -> None:
     assert settings.fritz_repeater_ips == ""
     assert settings.fritz_repeater_ip_list == ()
     assert settings.fritz_repeater_timeout == 25
+    assert settings.fritz_eventlog_enabled is True
+    assert settings.event_retention_days == 90
 
 
 def test_repeater_ip_list_splits_and_deduplicates(tmp_path) -> None:

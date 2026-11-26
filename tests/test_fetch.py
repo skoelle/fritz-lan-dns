@@ -9,6 +9,7 @@ from fritz_lan_dns.openwrt import OpenWrtNotFound
 from tests.helpers import make_settings
 
 FIXTURE = Path(__file__).parent / "fixtures" / "mesh.json"
+LOG_FIXTURE = Path(__file__).parent / "fixtures" / "device-log.xml"
 
 
 class FakeClient:
@@ -358,6 +359,70 @@ def test_run_fetch_disabled_scan_keeps_state(tmp_path: Path, monkeypatch) -> Non
     monkeypatch.setattr("fritz_lan_dns.fetch.scan_ports", fail_scan)
     result = run_fetch(settings)
     assert result["http_open"] == 0
+
+
+class EventLogClient(FakeClient):
+    def get_device_log_path(self) -> str:
+        return "/devicelog.lua?sid=test"
+
+    def fetch_device_log_text(self, path: str, security_port: int) -> str:
+        return LOG_FIXTURE.read_text(encoding="utf-8")
+
+
+def test_run_fetch_stores_wlan_events(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(
+        tmp_path,
+        fritz_eventlog_enabled=True,
+        event_retention_days=3650,
+        http_scan_enabled=False,
+    )
+    monkeypatch.setattr("fritz_lan_dns.fetch.FritzClient", EventLogClient)
+
+    result = run_fetch(settings)
+
+    assert result["wlan_events"] == 8
+    with db.connect(settings.db_path) as conn:
+        events = db.load_wlan_events(conn, days=3650, include_info=True)
+        by_id = {event["event_id"]: event for event in events}
+        assert set(by_id) == {674, 719, 783, 787, 791, 794, 796}
+        radar = by_id[796]
+        assert radar["entries"] == 2
+        assert radar["occurrences"] == 1
+        assert radar["channel"] == "124"
+        cac = by_id[794]
+        assert cac["entries"] == 1
+        assert cac["occurrences"] == 2
+        assert cac["first_seen"] == "2026-11-26 16:42:58"
+
+        visible = db.load_wlan_events(conn, days=3650)
+        assert all(event["event_id"] not in (674, 719) for event in visible)
+
+        summary = db.load_wlan_event_counts(conn, hours=0)
+        summary_by_id = {row["event_id"]: row for row in summary}
+        assert summary_by_id[796]["entries"] == 2
+
+
+def test_run_fetch_eventlog_failure_is_warning(tmp_path: Path, monkeypatch) -> None:
+    settings = make_settings(
+        tmp_path,
+        fritz_eventlog_enabled=True,
+        http_scan_enabled=False,
+    )
+
+    class FailingEventLogClient(FakeClient):
+        def get_device_log_path(self) -> str:
+            raise FritzBoxError("kein Ereignisprotokoll")
+
+    monkeypatch.setattr("fritz_lan_dns.fetch.FritzClient", FailingEventLogClient)
+
+    result = run_fetch(settings)
+
+    assert result["wlan_events"] == 0
+    assert "Ereignisprotokoll" in (result["warning"] or "")
+    with db.connect(settings.db_path) as conn:
+        latest = db.latest_snapshot(conn)
+        assert latest is not None
+        assert latest["status"] == "ok"
 
 
 def test_run_fetch_failure_keeps_old_dns_files(tmp_path: Path, monkeypatch) -> None:

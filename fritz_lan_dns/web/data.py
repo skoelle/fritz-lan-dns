@@ -3,9 +3,11 @@ from __future__ import annotations
 import ipaddress
 import sqlite3
 from collections import defaultdict
+from datetime import datetime
 
 from .. import db
 from ..config import Settings
+from ..fritz.events import EVENT_LABELS, SEVERITY_LABELS
 from ..models import HostRecord, MeshNode
 from ..util import (
     format_duration,
@@ -394,6 +396,21 @@ def wlan_view(entry: dict | None, open_ips: set[str] | None = None) -> dict | No
         band: sum(1 for item in ap_interfaces if item.get("band") == band)
         for band in ("2.4 GHz", "5 GHz", "6 GHz")
     }
+    primary_5g = None
+    for device in devices:
+        for interface in device["interfaces"]:
+            if interface.get("band") != "5 GHz":
+                continue
+            primary_5g = {
+                "device_name": device["name"],
+                "channel": interface.get("channel"),
+                "channel_width": interface.get("channel_width"),
+                "utilization_label": interface.get("utilization_label"),
+                "utilization_class": interface.get("utilization_class"),
+            }
+            break
+        if primary_5g:
+            break
     return {
         "started_at": entry.get("started_at"),
         "devices": devices,
@@ -406,7 +423,103 @@ def wlan_view(entry: dict | None, open_ips: set[str] | None = None) -> dict | No
             "clients": len(clients),
             "guest_radios": sum(1 for item in ap_interfaces if item.get("is_guest")),
             "bands": bands,
+            "primary_5g": primary_5g,
         },
+    }
+
+
+_EVENT_SEVERITY_CLASSES = {
+    "critical": "failed",
+    "warning": "stale",
+    "info": "",
+}
+
+
+def _format_event_time(value: str | None) -> str:
+    if not value:
+        return "-"
+    try:
+        return datetime.strptime(value, "%Y-%m-%d %H:%M:%S").strftime("%d.%m.%y %H:%M")
+    except ValueError:
+        return value
+
+
+def wlan_events_view(
+    conn: sqlite3.Connection,
+    *,
+    days: int = 7,
+    include_info: bool = False,
+    limit: int = 50,
+) -> list[dict]:
+    rows = db.load_wlan_events(
+        conn, days=days, include_info=include_info, limit=limit
+    )
+    events = []
+    for row in rows:
+        event_id = int(row.get("event_id") or 0)
+        severity = str(row.get("severity") or "info")
+        entries = int(row.get("entries") or 0)
+        occurrences = int(row.get("occurrences") or 0)
+        message = str(row.get("message") or "")
+        events.append(
+            dict(row)
+            | {
+                "event_id": event_id,
+                "severity": severity,
+                "severity_label": SEVERITY_LABELS.get(severity, severity),
+                "severity_class": _EVENT_SEVERITY_CLASSES.get(severity, ""),
+                "label": EVENT_LABELS.get(event_id) or message[:160] or "WLAN-Ereignis",
+                "node": str(row.get("node") or ""),
+                "channel": str(row.get("channel") or ""),
+                "count": max(entries, occurrences),
+                "last_seen_label": _format_event_time(row.get("last_seen")),
+                "first_seen_label": _format_event_time(row.get("first_seen")),
+            }
+        )
+    return events
+
+
+def _event_summary_item(row: dict | None) -> dict | None:
+    if not row:
+        return None
+    return {
+        "event_at": row.get("event_at"),
+        "event_at_label": _format_event_time(row.get("event_at")),
+        "channel": str(row.get("channel") or ""),
+        "node": str(row.get("node") or ""),
+        "message": str(row.get("message") or ""),
+    }
+
+
+def wlan_events_summary(
+    conn: sqlite3.Connection, *, hours: int = 24
+) -> dict:
+    rows = db.load_wlan_event_counts(conn, hours=hours)
+    counts = {int(row["event_id"]): int(row["entries"]) for row in rows}
+    cac_rows = [
+        row
+        for row in (
+            db.latest_wlan_event(conn, 794),
+            db.latest_wlan_event(conn, 787),
+        )
+        if row
+    ]
+    last_cac = max(cac_rows, key=lambda row: row["event_at"]) if cac_rows else None
+    radar = counts.get(796, 0)
+    cac = counts.get(794, 0) + counts.get(787, 0)
+    interference = counts.get(791, 0)
+    strong_interference = counts.get(783, 0)
+    return {
+        "radar": radar,
+        "cac": cac,
+        "interference": interference,
+        "strong_interference": strong_interference,
+        "repeater": counts.get(719, 0),
+        "bandwidth": counts.get(674, 0),
+        "active": bool(radar or cac or interference or strong_interference),
+        "last_radar": _event_summary_item(db.latest_wlan_event(conn, 796)),
+        "last_cac": _event_summary_item(last_cac),
+        "last_interference": _event_summary_item(db.latest_wlan_event(conn, 791)),
     }
 
 
@@ -431,6 +544,8 @@ def dashboard(conn: sqlite3.Connection, settings: Settings) -> dict:
         "http_open_ips": open_ips,
         "mwan3": mwan3_view(db.latest_mwan3(conn)),
         "wlan": wlan_view(db.latest_wlan(conn), open_ips),
+        "wlan_events": wlan_events_view(conn, days=7, limit=3),
+        "wlan_event_summary": wlan_events_summary(conn, hours=24),
         "settings": settings,
     }
 
@@ -659,11 +774,23 @@ def hosts(
     ]
 
 
-def wlan(conn: sqlite3.Connection) -> dict:
+def wlan(
+    conn: sqlite3.Connection, *, days: int = 7, include_info: bool = False
+) -> dict:
     open_ips = db.load_http_open_ips(conn)
+    event_days = max(1, min(days, 365))
     return {
         "latest": db.latest_snapshot(conn),
         "wlan": wlan_view(db.latest_wlan(conn), open_ips),
+        "events": wlan_events_view(
+            conn,
+            days=event_days,
+            include_info=include_info,
+            limit=50,
+        ),
+        "event_summary": wlan_events_summary(conn, hours=24),
+        "event_days": event_days,
+        "include_info": include_info,
         "http_open_ips": open_ips,
     }
 

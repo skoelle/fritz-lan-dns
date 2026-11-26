@@ -83,6 +83,7 @@ class Settings:
     fetch_interval_minutes: int
     snapshot_retention_days: int
     raw_retention_days: int
+    event_retention_days: int
     host_retention_days: int
     http_scan_enabled: bool
     http_scan_timeout: float
@@ -104,6 +105,7 @@ class Settings:
     fritz_repeater_user: str
     fritz_repeater_pw: str
     fritz_repeater_timeout: int
+    fritz_eventlog_enabled: bool
     openwrt_enabled: bool
     openwrt_url: str
     openwrt_user: str
@@ -204,6 +206,7 @@ def build_settings(env_file: Path | None = None) -> Settings:
         fetch_interval_minutes=_env_int("FETCH_INTERVAL_MINUTES", 60),
         snapshot_retention_days=_env_int("SNAPSHOT_RETENTION_DAYS", 90),
         raw_retention_days=_env_int("RAW_RETENTION_DAYS", 30),
+        event_retention_days=_env_int("EVENT_RETENTION_DAYS", 90),
         host_retention_days=_env_int("DNS_HOST_RETENTION_DAYS", 90),
         http_scan_enabled=_env_bool("HTTP_SCAN_ENABLED", True),
         http_scan_timeout=_env_float("HTTP_SCAN_TIMEOUT", 1.0),
@@ -225,6 +228,7 @@ def build_settings(env_file: Path | None = None) -> Settings:
         fritz_repeater_user=_env("FRITZ_REPEATER_USER") or box_user,
         fritz_repeater_pw=_env("FRITZ_REPEATER_PW") or box_pw,
         fritz_repeater_timeout=_env_int("FRITZ_REPEATER_TIMEOUT", fritz_timeout),
+        fritz_eventlog_enabled=_env_bool("FRITZ_EVENTLOG_ENABLED", True),
         openwrt_enabled=_env_bool("OPENWRT_ENABLED", False),
         openwrt_url=(_env("OPENWRT_URL") or "").rstrip("/"),
         openwrt_user=_env("OPENWRT_USER") or "",

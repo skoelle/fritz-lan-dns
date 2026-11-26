@@ -195,6 +195,9 @@ button:disabled { opacity: 0.6; cursor: wait; }
     color: #222;
 }
 .muted-cell { color: var(--muted); font-size: 0.85rem; }
+.event-time { white-space: nowrap; color: var(--muted); }
+.event-message { max-width: 34rem; }
+.wlan-dashboard-head .reset-link { margin-left: 0.4rem; }
 
 .chip {
     display: inline-flex;

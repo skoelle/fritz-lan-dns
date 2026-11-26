@@ -178,7 +178,18 @@ class FritzClient:
             raise FritzBoxError("X_AVM-DE_GetMeshListPath lieferte keinen Pfad")
         return path
 
-    def fetch_mesh_text(self, path: str, security_port: int) -> str:
+    def get_device_log_path(self) -> str:
+        values = self.soap(
+            "deviceinfo",
+            "urn:dslforum-org:service:DeviceInfo:1",
+            "X_AVM-DE_GetDeviceLogPath",
+        )
+        path = values.get("NewDeviceLogPath")
+        if not path:
+            raise FritzBoxError("X_AVM-DE_GetDeviceLogPath lieferte keinen Pfad")
+        return path
+
+    def _fetch_secure_text(self, path: str, security_port: int, label: str) -> str:
         if path.startswith("http://") or path.startswith("https://"):
             url = path
         else:
@@ -186,8 +197,16 @@ class FritzClient:
             url = f"https://{self.ip}:{security_port}{suffix}"
         response = self._get(url)
         if response.status_code >= 400:
-            raise FritzBoxError(f"Mesh-Liste konnte nicht geladen werden: HTTP {response.status_code}")
+            raise FritzBoxError(
+                f"{label} konnte nicht geladen werden: HTTP {response.status_code}"
+            )
         return response.text
+
+    def fetch_mesh_text(self, path: str, security_port: int) -> str:
+        return self._fetch_secure_text(path, security_port, "Mesh-Liste")
+
+    def fetch_device_log_text(self, path: str, security_port: int) -> str:
+        return self._fetch_secure_text(path, security_port, "Ereignisprotokoll")
 
     def get_device_info(self) -> dict[str, str]:
         return self.soap(

@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<DeviceLog>
+  <Event>
+    <id>500</id>
+    <group>sys</group>
+    <date>23.11.26</date>
+    <time>00:07:19</time>
+    <msg>Anmeldung an der FRITZ!Box-Benutzeroberfläche von IP-Adresse 192.0.2.10.</msg>
+  </Event>
+  <Event>
+    <id>113</id>
+    <group>net</group>
+    <date>22.11.26</date>
+    <time>12:47:58</time>
+    <msg>DynDNS-Fehler: Der DynDNS-Anbieter meldet Fehler 0.</msg>
+  </Event>
+  <Event>
+    <id>796</id>
+    <group>wlan</group>
+    <date>24.11.26</date>
+    <time>15:27:44</time>
+    <msg>Radar wurde auf Kanal 124 (Frequenz 5.625 GHz) oder einem mitbenutzten Kanal erkannt, automatischer Kanalwechsel wegen bevorrechtigten Nutzers ausgeführt.</msg>
+  </Event>
+  <Event>
+    <id>796</id>
+    <group>wlan</group>
+    <date>23.11.26</date>
+    <time>08:37:44</time>
+    <msg>Radar wurde auf Kanal 124 (Frequenz 5.625 GHz) oder einem mitbenutzten Kanal erkannt, automatischer Kanalwechsel wegen bevorrechtigten Nutzers ausgeführt.</msg>
+  </Event>
+  <Event>
+    <id>794</id>
+    <group>wlan</group>
+    <date>26.11.26</date>
+    <time>16:42:59</time>
+    <msg>[repeater-a] 5-GHz-Band für 10 Min. auf dem gewählten Kanal 100-128 (Frequenz 5.500-5.640 GHz) nicht nutzbar wegen Prüfung auf bevorrechtigten Nutzer (z.B. Radar). [2 Meldungen seit 26.11.26 16:42:58]</msg>
+  </Event>
+  <Event>
+    <id>787</id>
+    <group>wlan</group>
+    <date>22.11.26</date>
+    <time>23:55:53</time>
+    <msg>Temporärer Kanalwechsel auf Kanal 108 (Frequenz 5.540 GHz), bis die Prüfung auf bevorrechtigte Nutzer (z.B. Radar) abgeschlossen ist.</msg>
+  </Event>
+  <Event>
+    <id>791</id>
+    <group>wlan</group>
+    <date>18.10.26</date>
+    <time>06:12:50</time>
+    <msg>[repeater-a] WLAN: Eine Störquelle wurde auf Kanal 108 (Frequenz 5.540 GHz) erkannt. [1290 Meldungen seit 17.10.26 18:15:12]</msg>
+  </Event>
+  <Event>
+    <id>783</id>
+    <group>wlan</group>
+    <date>19.09.26</date>
+    <time>13:04:57</time>
+    <msg>[repeater-a] Eine sehr starke Störquelle wurde auf Kanal 108 (Frequenz 5.540 GHz) erkannt, automatischer Kanalwechsel ausgeführt.</msg>
+  </Event>
+  <Event>
+    <id>674</id>
+    <group>wlan</group>
+    <date>22.11.26</date>
+    <time>19:49:25</time>
+    <msg>[repeater-b] WLAN-Übertragungsqualität durch reduzierte Kanalbandbreite erhöht (2,4 GHz). [16 Meldungen seit 19.11.26 22:09:16]</msg>
+  </Event>
+  <Event>
+    <id>719</id>
+    <group>wlan</group>
+    <date>21.11.26</date>
+    <time>03:16:34</time>
+    <msg>[repeater-a] Repeater-Anmeldung an der Basis gescheitert: Verbindungsaufbau fehlgeschlagen. MAC-Adresse: AA:BB:CC:00:00:01. [7 Meldungen seit 10.11.26 08:47:04]</msg>
+  </Event>
+</DeviceLog>

@@ -23,6 +23,60 @@
 <div class="alert warning">{{ latest.warning }}</div>
 {% endif %}
 
+<div class="box" id="events">
+    <div class="wlan-dashboard-head">
+        <div class="box-title">WLAN-Auffälligkeiten</div>
+        <div>
+            <a class="reset-link" href="/wlan?days=1{% if include_info %}&all=1{% endif %}">24 h</a>
+            <a class="reset-link" href="/wlan?days=7{% if include_info %}&all=1{% endif %}">7 Tage</a>
+            <a class="reset-link" href="/wlan?days=30{% if include_info %}&all=1{% endif %}">30 Tage</a>
+            <a class="reset-link" href="/wlan?days=90{% if include_info %}&all=1{% endif %}">90 Tage</a>
+            <a class="reset-link" href="{% if include_info %}/wlan?days={{ event_days }}{% else %}/wlan?days={{ event_days }}&all=1{% endif %}">{% if include_info %}Nur Auffälligkeiten{% else %}Alle WLAN-Ereignisse{% endif %}</a>
+        </div>
+    </div>
+    <p class="meta">
+        Letzte 24 h:
+        {% if event_summary.active %}
+        {{ event_summary.radar }} Radar · {{ event_summary.cac }} DFS-Prüfungen{% if event_summary.interference %} · {{ event_summary.interference }} Störquellen{% endif %}{% if event_summary.strong_interference %} · {{ event_summary.strong_interference }} starke Störquellen{% endif %}
+        {% else %}
+        keine Radar-/DFS-Auffälligkeiten
+        {% endif %}
+    </p>
+    {% if event_summary.last_radar %}
+    <p class="hint">
+        Letzter Radar: {{ event_summary.last_radar.event_at_label }}{% if event_summary.last_radar.channel %} · Kanal {{ event_summary.last_radar.channel }}{% endif %}{% if event_summary.last_radar.node %} · {{ event_summary.last_radar.node }}{% endif %}
+    </p>
+    {% endif %}
+    <table data-sortable>
+        <thead>
+            <tr>
+                <th scope="col">Zuletzt</th>
+                <th scope="col">Schwere</th>
+                <th scope="col">Ereignis</th>
+                <th scope="col">Gerät</th>
+                <th scope="col">Kanal</th>
+                <th scope="col">Anzahl</th>
+                <th scope="col">Seit</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for event in events %}
+        <tr>
+            <td class="event-time">{{ event.last_seen_label }}</td>
+            <td><span class="badge {{ event.severity_class }}">{{ event.severity_label }}</span></td>
+            <td class="event-message" title="{{ event.message }}">{{ event.label }}</td>
+            <td>{{ event.node or "-" }}</td>
+            <td>{{ event.channel or "-" }}</td>
+            <td>{{ event.count }}×</td>
+            <td class="event-time">{{ event.first_seen_label }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="empty">Keine WLAN-Ereignisse im gewählten Zeitraum.</td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
 {% if not wlan %}
 <p class="empty">Noch keine WLAN-Daten vorhanden.</p>
 {% else %}

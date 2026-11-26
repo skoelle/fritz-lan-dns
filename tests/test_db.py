@@ -3,13 +3,14 @@ from __future__ import annotations
 import json
 import sqlite3
 from dataclasses import asdict
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from fritz_lan_dns import db
 from fritz_lan_dns.dns import build_dns_records, ensure_dns_files, write_dns_files
 from fritz_lan_dns.fritz.mesh import parse_mesh
 from fritz_lan_dns.fritz.wlan import parse_wlan
-from fritz_lan_dns.models import HostRecord, MeshNode, MeshSnapshot
+from fritz_lan_dns.models import HostRecord, MeshNode, MeshSnapshot, WlanEvent
 from fritz_lan_dns.util import iso_now
 from fritz_lan_dns.web import data as web_data
 from tests.helpers import make_settings
@@ -555,6 +556,13 @@ def test_latest_wlan_roundtrip_and_view(tmp_path: Path) -> None:
             "clients": 1,
             "guest_radios": 1,
             "bands": {"2.4 GHz": 1, "5 GHz": 2, "6 GHz": 0},
+            "primary_5g": {
+                "device_name": "router",
+                "channel": 36,
+                "channel_width": "80 MHz",
+                "utilization_label": "12 %",
+                "utilization_class": "low",
+            },
         }
         devices = {device["name"]: device for device in view["devices"]}
         assert devices["router"]["ap_count"] == 2
@@ -728,6 +736,146 @@ def test_http_status_web_annotations(tmp_path: Path) -> None:
 
         dns = web_data.dns(conn, settings)
         assert "192.0.2.50" in dns["http_open_ips"]
+
+
+def _wlan_event(
+    event_id: int,
+    event_at: str,
+    *,
+    severity: str,
+    message: str,
+    node: str = "",
+    channel: str = "",
+    occurrences: int = 1,
+) -> WlanEvent:
+    return WlanEvent(
+        event_id=event_id,
+        group="wlan",
+        severity=severity,
+        node=node,
+        channel=channel,
+        message=message,
+        event_at=event_at,
+        first_seen=event_at,
+        occurrences=occurrences,
+        fingerprint=f"{event_id}|{node}|{channel}|{message}",
+    )
+
+
+def test_wlan_events_roundtrip_filter_and_prune(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    db.init_schema(settings.db_path)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    two_days = (datetime.now() - timedelta(days=2)).strftime("%Y-%m-%d %H:%M:%S")
+    old = (datetime.now() - timedelta(days=100)).strftime("%Y-%m-%d %H:%M:%S")
+    radar_message = "Radar wurde auf Kanal 124 erkannt."
+    events = [
+        _wlan_event(
+            796,
+            now,
+            severity="critical",
+            message=radar_message,
+            channel="124",
+        ),
+        _wlan_event(
+            796,
+            two_days,
+            severity="critical",
+            message=radar_message,
+            channel="124",
+        ),
+        _wlan_event(
+            794,
+            now,
+            severity="warning",
+            message="DFS-Prüfung auf Kanal 100-128.",
+            node="fritzmesh-TriBand",
+            channel="100-128",
+            occurrences=5,
+        ),
+        _wlan_event(
+            674,
+            now,
+            severity="info",
+            message="2,4-GHz-Bandbreite reduziert.",
+            node="fritzmesh3OG-imac",
+        ),
+        _wlan_event(
+            791,
+            old,
+            severity="warning",
+            message="Störquelle auf Kanal 108.",
+            channel="108",
+        ),
+    ]
+
+    with db.connect(settings.db_path) as conn:
+        assert db.upsert_wlan_events(conn, events) == 5
+        assert db.upsert_wlan_events(conn, events[:1]) == 1
+
+        all_events = db.load_wlan_events(conn, days=365, include_info=True)
+        by_id = {event["event_id"]: event for event in all_events}
+        assert set(by_id) == {674, 791, 794, 796}
+        assert by_id[796]["entries"] == 2
+        assert by_id[796]["occurrences"] == 1
+        assert by_id[794]["occurrences"] == 5
+
+        visible = db.load_wlan_events(conn, days=365)
+        assert {event["event_id"] for event in visible} == {791, 794, 796}
+
+        recent = db.load_wlan_events(conn, days=7)
+        assert {event["event_id"] for event in recent} == {794, 796}
+
+        counts = {
+            row["event_id"]: row
+            for row in db.load_wlan_event_counts(conn, hours=0)
+        }
+        assert counts[796]["entries"] == 2
+        assert counts[794]["occurrences"] == 5
+
+        latest = db.latest_wlan_event(conn, 796)
+        assert latest is not None
+        assert latest["event_at"] == now
+
+        assert db.prune_wlan_events(conn, 90) == 1
+        remaining = db.load_wlan_events(conn, days=365, include_info=True)
+        assert 791 not in {event["event_id"] for event in remaining}
+
+
+def test_web_data_wlan_events(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    db.init_schema(settings.db_path)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    events = [
+        _wlan_event(
+            796,
+            now,
+            severity="critical",
+            message="Radar wurde auf Kanal 124 erkannt.",
+            channel="124",
+        ),
+        _wlan_event(
+            674,
+            now,
+            severity="info",
+            message="2,4-GHz-Bandbreite reduziert.",
+        ),
+    ]
+
+    with db.connect(settings.db_path) as conn:
+        db.upsert_wlan_events(conn, events)
+        wlan = web_data.wlan(conn, days=7)
+        assert wlan["events"][0]["label"] == "Radar erkannt, Kanalwechsel"
+        assert wlan["events"][0]["severity_label"] == "Kritisch"
+        assert wlan["event_summary"]["radar"] == 1
+        assert all(event["event_id"] != 674 for event in wlan["events"])
+
+        all_events = web_data.wlan(conn, days=7, include_info=True)
+        assert any(event["event_id"] == 674 for event in all_events["events"])
+
+        dashboard = web_data.dashboard(conn, settings)
+        assert dashboard["wlan_event_summary"]["radar"] == 1
+        assert dashboard["wlan_events"][0]["event_id"] == 796
 
 
 def test_prune_old_snapshots(tmp_path: Path) -> None:

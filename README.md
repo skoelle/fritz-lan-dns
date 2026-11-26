@@ -26,6 +26,8 @@ Owner-Namen `foo.<dns-domain>.` zurückgeschrieben.
 - Mesh-Topologie inkl. LAN/WLAN/PLC-Verbindungen und PLC-Raten
 - WLAN-Übersicht mit Radios, Kanälen, Kanalbreite, Auslastung, SSID,
   Sicherheit und verbundenen Clients inkl. Signal
+- WLAN-Auffälligkeiten aus dem FRITZ!Box-Ereignisprotokoll
+  (DFS/Radar, Kanalwechsel, Störquellen)
 - Alle bekannten FRITZ!Box-Hosts (aktiv und offline)
 - Optional: zweite Host-Quelle OpenWrt (DHCP-Leases + statische Hosts) via ubus
 - Webinterface für Dashboard, Topologie, WLAN, Hosts, DNS und Historie
@@ -93,6 +95,10 @@ DNS_NS_IP=192.0.2.10
 
 SNAPSHOT_RETENTION_DAYS=90
 RAW_RETENTION_DAYS=30
+
+# WLAN-Auffälligkeiten aus dem FRITZ!Box-Ereignisprotokoll
+FRITZ_EVENTLOG_ENABLED=1
+EVENT_RETENTION_DAYS=90
 
 # Optional: OpenWrt als zweite Host-Quelle
 OPENWRT_ENABLED=0
@@ -420,16 +426,28 @@ SSID, Kanal, Band, Sicherheit, Clients und Signal werden trotzdem angezeigt.
 Die WLAN-Daten landen pro Snapshot in `wlan_json`; die neueste nicht-leere
 Aufzeichnung wird im Dashboard und unter `/wlan` dargestellt.
 
+Zusätzlich liest die App das vollständige FRITZ!Box-Ereignisprotokoll über
+`X_AVM-DE_GetDeviceLogPath` (TR-064 über den Security-Port) und speichert nur
+WLAN-Ereignisse. Im Dashboard und unter `/wlan` werden ausschließlich
+ungewöhnliche Ereignisse gezeigt: Radar/DFS-Prüfungen, Kanalwechsel und
+Störquellen. Normale Serienmeldungen (2,4-GHz-Bandbreitenreduktion,
+Repeater-Anmeldefehler) sind standardmäßig ausgeblendet und über
+`/wlan?all=1` sichtbar. Login- und Nicht-WLAN-Ereignisse werden ignoriert.
+Das Roh-Log wird nicht abgelegt; die Events laufen nach
+`EVENT_RETENTION_DAYS` (Default 90) aus.
+
 ## Webinterface
 
 - `/` Dashboard: letzter Lauf, Zähler, WLAN, MultiWAN, Konflikte, Historie, Refresh
 - `/topology`: Mesh-Baum und Offline-Geräte
-- `/wlan`: WLAN-Radios pro Gerät und WLAN-Clients inkl. Signal
+- `/wlan`: WLAN-Radios pro Gerät, WLAN-Clients inkl. Signal und
+  Auffälligkeiten aus dem Ereignisprotokoll (`?all=1` zeigt alle WLAN-Events)
 - `/hosts`: alle bekannten Hosts, Suche, Status- und Quellen-Filter
 - `/dns`: Records mit Quelle, Konflikte, Serial, Corefile, Downloads
 - `/history`: Snapshots und Fehler
 - `/api/status`, `/api/topology`, `/api/wlan`, `/api/hosts`, `/api/dns`,
   `/api/snapshots`, `/api/snapshots/{id}`
+- `/api/wlan` enthält zusätzlich `events`, `event_summary` und `event_days`
 - `POST /api/refresh`: manueller Abruf
 - `/health`: Healthcheck für Docker
 

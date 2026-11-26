@@ -13,13 +13,14 @@ from .dns import build_dns_records, ensure_dns_files, write_dns_files
 from .fritz import (
     FritzClient,
     load_mesh_json,
+    parse_device_log,
     parse_host_entries,
     parse_mesh,
     parse_wlan,
 )
 from .fritz.repeater import fetch_repeater_wlan
 from .merge import merge_hosts
-from .models import HostRecord, MeshSnapshot, WlanSnapshot
+from .models import HostRecord, MeshSnapshot, WlanEvent, WlanSnapshot
 from .openwrt import OpenWrtClient, OpenWrtNotFound, parse_openwrt_hosts
 from .portscan import scan_ports
 from .util import iso_now, load_device_names
@@ -255,6 +256,22 @@ def run_fetch(settings: Settings, legacy_json: Path | None = None) -> dict:
                     + "Hosts-API lieferte keine Einträge, nutze Mesh-Nodes"
                 )
 
+            wlan_events: list[WlanEvent] = []
+            if settings.fritz_eventlog_enabled:
+                try:
+                    log_path = client.get_device_log_path()
+                    log_text = client.fetch_device_log_text(log_path, security_port)
+                    wlan_events = parse_device_log(log_text)
+                except Exception as exc:  # noqa: BLE001 - optionaler Abruf
+                    LOGGER.warning(
+                        "Ereignisprotokoll-Abruf fehlgeschlagen (%s)",
+                        type(exc).__name__,
+                    )
+                    warning = (
+                        (warning + "; " if warning else "")
+                        + "Ereignisprotokoll-Abruf fehlgeschlagen"
+                    )
+
             extra_hosts: list[HostRecord] = []
             mwan3: dict | None = None
             openwrt_client, openwrt_error = _openwrt_client(settings)
@@ -352,6 +369,8 @@ def run_fetch(settings: Settings, legacy_json: Path | None = None) -> dict:
                     ensure_ascii=False,
                 ),
             )
+            if wlan_events:
+                db.upsert_wlan_events(conn, wlan_events, snapshot_id)
 
             all_hosts = db.load_hosts(conn)
             static = db.load_dns_static(conn)
@@ -376,12 +395,13 @@ def run_fetch(settings: Settings, legacy_json: Path | None = None) -> dict:
             db.prune_snapshots(conn, settings.snapshot_retention_days)
             db.prune_hosts(conn, settings.host_retention_days)
             db.prune_http_status(conn, settings.host_retention_days)
+            db.prune_wlan_events(conn, settings.event_retention_days)
             prune_raw_files(settings)
             mwan3_interfaces = len(mwan3.get("interfaces") or {}) if mwan3 else 0
             LOGGER.info(
                 "Snapshot %s: %s Nodes (%s online), %s Hosts (%s OpenWrt), "
                 "%s MWAN3-Interfaces, %s WLAN-Radios, %s WLAN-Clients, "
-                "%s DNS-Records, %s HTTP-Ports",
+                "%s WLAN-Ereignisse, %s DNS-Records, %s HTTP-Ports",
                 snapshot_id,
                 len(mesh.nodes),
                 sum(1 for node in mesh.nodes if node.online),
@@ -390,6 +410,7 @@ def run_fetch(settings: Settings, legacy_json: Path | None = None) -> dict:
                 mwan3_interfaces,
                 len(wlan.interfaces),
                 len(wlan.clients),
+                len(wlan_events),
                 dns_summary["records"],
                 http_open_count,
             )
@@ -402,6 +423,7 @@ def run_fetch(settings: Settings, legacy_json: Path | None = None) -> dict:
                 "mwan3_interfaces": mwan3_interfaces,
                 "wlan_interfaces": len(wlan.interfaces),
                 "wlan_clients": len(wlan.clients),
+                "wlan_events": len(wlan_events),
                 "dns_records": dns_summary["records"],
                 "dns_conflicts": dns_summary["conflicts"],
                 "http_open": http_open_count,

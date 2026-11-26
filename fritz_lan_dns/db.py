@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Iterable, Iterator
 
-from .models import DnsRecord, HostRecord, MeshLink, MeshNode, MeshSnapshot
+from .models import DnsRecord, HostRecord, MeshLink, MeshNode, MeshSnapshot, WlanEvent
 from .util import iso_now
 
 SCHEMA = """
@@ -120,6 +120,26 @@ CREATE TABLE IF NOT EXISTS http_status (
     last_open_at TEXT,
     last_checked_at TEXT
 );
+
+CREATE TABLE IF NOT EXISTS wlan_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    fingerprint TEXT NOT NULL,
+    event_id INTEGER NOT NULL,
+    group_name TEXT NOT NULL,
+    severity TEXT NOT NULL,
+    node TEXT,
+    channel TEXT,
+    message TEXT NOT NULL,
+    event_at TEXT NOT NULL,
+    first_seen TEXT,
+    occurrences INTEGER NOT NULL DEFAULT 1,
+    snapshot_id INTEGER,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(fingerprint, event_at)
+);
+CREATE INDEX IF NOT EXISTS idx_wlan_events_at ON wlan_events(event_at);
+CREATE INDEX IF NOT EXISTS idx_wlan_events_fp ON wlan_events(fingerprint);
 """
 
 
@@ -533,6 +553,146 @@ def latest_wlan(conn: sqlite3.Connection) -> dict | None:
     if not isinstance(data, dict):
         return None
     return {"started_at": row["started_at"], "data": data}
+
+
+def _event_cutoff(days: int) -> str:
+    return (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def upsert_wlan_events(
+    conn: sqlite3.Connection,
+    events: Iterable[WlanEvent],
+    snapshot_id: int | None = None,
+) -> int:
+    now = iso_now()
+    count = 0
+    for event in events:
+        conn.execute(
+            """
+            INSERT INTO wlan_events (
+                fingerprint, event_id, group_name, severity, node, channel,
+                message, event_at, first_seen, occurrences, snapshot_id,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(fingerprint, event_at) DO UPDATE SET
+                severity = excluded.severity,
+                occurrences = MAX(wlan_events.occurrences, excluded.occurrences),
+                first_seen = CASE
+                    WHEN wlan_events.first_seen IS NULL THEN excluded.first_seen
+                    WHEN excluded.first_seen IS NULL THEN wlan_events.first_seen
+                    WHEN excluded.first_seen < wlan_events.first_seen
+                        THEN excluded.first_seen
+                    ELSE wlan_events.first_seen
+                END,
+                snapshot_id = excluded.snapshot_id,
+                updated_at = excluded.updated_at
+            """,
+            (
+                event.fingerprint,
+                event.event_id,
+                event.group,
+                event.severity,
+                event.node,
+                event.channel,
+                event.message,
+                event.event_at,
+                event.first_seen,
+                event.occurrences,
+                snapshot_id,
+                now,
+                now,
+            ),
+        )
+        count += 1
+    conn.commit()
+    return count
+
+
+def load_wlan_events(
+    conn: sqlite3.Connection,
+    *,
+    days: int = 7,
+    include_info: bool = False,
+    limit: int = 50,
+) -> list[dict]:
+    clauses: list[str] = []
+    params: list[object] = []
+    if not include_info:
+        clauses.append("severity IN ('critical', 'warning')")
+    if days > 0:
+        clauses.append("event_at >= ?")
+        params.append(_event_cutoff(days))
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    params.append(max(1, limit))
+    rows = conn.execute(
+        f"""
+        SELECT fingerprint, event_id, severity, node, channel, message,
+               COALESCE(MIN(first_seen), MIN(event_at)) AS first_seen,
+               MAX(event_at) AS last_seen,
+               COUNT(*) AS entries,
+               MAX(occurrences) AS occurrences
+        FROM wlan_events
+        {where}
+        GROUP BY fingerprint, event_id, severity, node, channel, message
+        ORDER BY last_seen DESC
+        LIMIT ?
+        """,
+        params,
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def load_wlan_event_counts(
+    conn: sqlite3.Connection, *, hours: int = 24
+) -> list[dict]:
+    clauses: list[str] = []
+    params: list[object] = []
+    if hours > 0:
+        clauses.append("event_at >= ?")
+        params.append(
+            (datetime.now() - timedelta(hours=hours)).strftime("%Y-%m-%d %H:%M:%S")
+        )
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    rows = conn.execute(
+        f"""
+        SELECT event_id, severity, COUNT(*) AS entries,
+               MAX(event_at) AS last_seen,
+               MAX(occurrences) AS occurrences
+        FROM wlan_events
+        {where}
+        GROUP BY event_id, severity
+        """,
+        params,
+    ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def latest_wlan_event(
+    conn: sqlite3.Connection, event_id: int
+) -> dict | None:
+    row = conn.execute(
+        """
+        SELECT fingerprint, event_id, severity, node, channel, message,
+               event_at, first_seen, occurrences
+        FROM wlan_events
+        WHERE event_id = ?
+        ORDER BY event_at DESC
+        LIMIT 1
+        """,
+        (event_id,),
+    ).fetchone()
+    return dict(row) if row is not None else None
+
+
+def prune_wlan_events(conn: sqlite3.Connection, retention_days: int) -> int:
+    if retention_days <= 0:
+        return 0
+    cur = conn.execute(
+        "DELETE FROM wlan_events WHERE event_at < ?",
+        (_event_cutoff(retention_days),),
+    )
+    conn.commit()
+    return cur.rowcount
 
 
 def load_dns_static(conn: sqlite3.Connection) -> list[dict]:

@@ -67,6 +67,57 @@
 </div>
 {% endif %}
 
+{% if wlan %}
+<div class="box">
+    <div class="wlan-dashboard-head">
+        <div class="box-title">WLAN/DFS</div>
+        <a class="reset-link" href="/wlan#events">Details</a>
+    </div>
+    {% if wlan.summary.primary_5g %}
+    <p class="meta">
+        5 GHz: Kanal {{ wlan.summary.primary_5g.channel or "-" }}
+        · {{ wlan.summary.primary_5g.channel_width or "-" }}
+        · <span class="utilization {{ wlan.summary.primary_5g.utilization_class }}">{{ wlan.summary.primary_5g.utilization_label }}</span>
+    </p>
+    {% endif %}
+    {% if wlan_event_summary.active %}
+        {% if wlan_event_summary.radar or wlan_event_summary.strong_interference %}
+        <div class="alert error">
+            Letzte 24 h: {{ wlan_event_summary.radar }} Radar · {{ wlan_event_summary.cac }} DFS-Prüfungen{% if wlan_event_summary.interference %} · {{ wlan_event_summary.interference }} Störquellen{% endif %}{% if wlan_event_summary.strong_interference %} · {{ wlan_event_summary.strong_interference }} starke Störquellen{% endif %}
+        </div>
+        {% else %}
+        <div class="alert warning">
+            Letzte 24 h: {{ wlan_event_summary.cac }} DFS-Prüfungen{% if wlan_event_summary.interference %} · {{ wlan_event_summary.interference }} Störquellen{% endif %}
+        </div>
+        {% endif %}
+    {% else %}
+    <p class="hint">Keine Radar-/DFS-Auffälligkeiten in den letzten 24 h.</p>
+    {% endif %}
+    {% if wlan_event_summary.last_radar %}
+    <p class="hint">
+        Letzter Radar: {{ wlan_event_summary.last_radar.event_at_label }}{% if wlan_event_summary.last_radar.channel %} · Kanal {{ wlan_event_summary.last_radar.channel }}{% endif %}{% if wlan_event_summary.last_radar.node %} · {{ wlan_event_summary.last_radar.node }}{% endif %}
+    </p>
+    {% endif %}
+    {% if wlan_events %}
+    <table data-sortable>
+        <thead>
+            <tr><th scope="col">Zuletzt</th><th scope="col">Schwere</th><th scope="col">Ereignis</th><th scope="col">Kanal</th></tr>
+        </thead>
+        <tbody>
+        {% for event in wlan_events %}
+        <tr>
+            <td class="event-time">{{ event.last_seen_label }}</td>
+            <td><span class="badge {{ event.severity_class }}">{{ event.severity_label }}</span></td>
+            <td class="event-message" title="{{ event.message }}">{{ event.label }}</td>
+            <td>{{ event.channel or "-" }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</div>
+{% endif %}
+
 {% if mwan3 %}
 <div class="box">
     <div class="box-title">🌐 MultiWAN (OpenWrt)</div>

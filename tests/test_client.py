@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import pytest
+
 from fritz_lan_dns.fritz.client import (
+    FritzBoxError,
     FritzClient,
     _parse_new_values,
     load_mesh_json,
@@ -56,3 +59,33 @@ def test_client_reads_wlan_configuration_and_associations(monkeypatch) -> None:
     assert len(associations) == 2
     assert associations[0]["NewAssociatedDeviceMACAddress"] == "aa:bb:cc:00:00:01"
     assert associations[1]["NewAssociatedDeviceMACAddress"] == "aa:bb:cc:00:00:02"
+
+
+def test_client_reads_device_log_path(monkeypatch) -> None:
+    client = FritzClient("192.0.2.10", "user", "password")
+    monkeypatch.setattr(
+        client,
+        "soap",
+        lambda *args, **kwargs: {"NewDeviceLogPath": "/devicelog.lua?sid=test"},
+    )
+    assert client.get_device_log_path() == "/devicelog.lua?sid=test"
+
+
+def test_client_rejects_missing_device_log_path(monkeypatch) -> None:
+    client = FritzClient("192.0.2.10", "user", "password")
+    monkeypatch.setattr(client, "soap", lambda *args, **kwargs: {})
+    with pytest.raises(FritzBoxError):
+        client.get_device_log_path()
+
+
+def test_client_fetches_device_log_text(monkeypatch) -> None:
+    client = FritzClient("192.0.2.10", "user", "password")
+    monkeypatch.setattr(
+        client.session,
+        "get",
+        lambda *args, **kwargs: FakeSoapResponse("<DeviceLog></DeviceLog>"),
+    )
+    assert (
+        client.fetch_device_log_text("/devicelog.lua?sid=test", 49443)
+        == "<DeviceLog></DeviceLog>"
+    )
