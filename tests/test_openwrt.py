@@ -76,9 +76,11 @@ def test_parse_leases_and_hints() -> None:
     assert by_name["nas"].active is True
     assert by_name["nas"].ip == "192.0.2.150"
     assert by_name["nas"].source == "openwrt"
+    assert by_name["nas"].address_source == "dhcp"
     assert by_name["nas"].key == "mac:aa:bb:cc:00:00:01"
     assert by_name["printer"].active is False
     assert by_name["printer"].ip == "192.0.2.153"
+    assert by_name["printer"].address_source == ""
 
 
 def test_parse_ipv6_is_optional() -> None:

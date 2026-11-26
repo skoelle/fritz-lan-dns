@@ -5,6 +5,7 @@ import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import parse_qs, urlencode, urlparse
 from xml.sax.saxutils import escape
 
 import requests
@@ -177,6 +178,57 @@ class FritzClient:
         if not path:
             raise FritzBoxError("X_AVM-DE_GetMeshListPath lieferte keinen Pfad")
         return path
+
+    def get_host_list_path(self) -> str:
+        values = self.soap(
+            "hosts",
+            "urn:dslforum-org:service:Hosts:1",
+            "X_AVM-DE_GetHostListPath",
+        )
+        path = values.get("NewX_AVM-DE_HostListPath")
+        if not path:
+            raise FritzBoxError("X_AVM-DE_GetHostListPath lieferte keinen Pfad")
+        return path
+
+    def get_static_dhcp_map(self) -> dict[str, bool]:
+        path = self.get_host_list_path()
+        sid = parse_qs(urlparse(path).query).get("sid", [""])[0]
+        if not sid:
+            raise FritzBoxError("Host-Liste lieferte keine SID")
+        query = urlencode(
+            {
+                "sid": sid,
+                "network": (
+                    "landevice:settings/landevice/list("
+                    "name,ip,mac,UID,static_dhcp)"
+                ),
+            }
+        )
+        try:
+            response = self._get(f"http://{self.ip}/query.lua?{query}")
+        except Exception as exc:  # noqa: BLE001 - SID darf nicht in Logs landen
+            raise FritzBoxError("static_dhcp-Abfrage fehlgeschlagen") from exc
+        if response.status_code >= 400:
+            raise FritzBoxError(
+                f"static_dhcp-Abfrage fehlgeschlagen: HTTP {response.status_code}"
+            )
+        try:
+            data = response.json()
+        except ValueError as exc:
+            raise FritzBoxError("static_dhcp-Antwort ist kein JSON") from exc
+        devices = data.get("network") or data.get("mq_devices") or []
+        if not isinstance(devices, list):
+            raise FritzBoxError("static_dhcp-Antwort enthält keine Geräteliste")
+        result: dict[str, bool] = {}
+        for device in devices:
+            if not isinstance(device, dict):
+                continue
+            mac = str(device.get("mac") or "").strip().lower()
+            if not mac:
+                continue
+            value = str(device.get("static_dhcp") or "").strip().lower()
+            result[mac] = value in ("1", "true", "yes", "on")
+        return result
 
     def get_device_log_path(self) -> str:
         values = self.soap(

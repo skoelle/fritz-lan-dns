@@ -34,6 +34,7 @@ class FakeClient:
                     "NewMACAddress": "AA:BB:CC:00:00:01",
                     "NewActive": "1",
                     "NewInterfaceType": "LAN",
+                    "NewAddressSource": "Static",
                 },
                 {
                     "NewHostName": "printer",
@@ -41,11 +42,15 @@ class FakeClient:
                     "NewMACAddress": "AA:BB:CC:00:00:02",
                     "NewActive": "1",
                     "NewInterfaceType": "LAN",
+                    "NewAddressSource": "DHCP",
                 },
             ],
             raw_xml="{}",
             errors=[],
         )
+
+    def get_static_dhcp_map(self) -> dict[str, bool]:
+        return {"aa:bb:cc:00:00:02": True}
 
     def get_device_info(self) -> dict[str, str]:
         return {"NewModelName": "FRITZ!Repeater 2400"}

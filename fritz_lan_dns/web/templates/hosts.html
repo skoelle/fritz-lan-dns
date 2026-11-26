@@ -30,6 +30,16 @@
             <option value="openwrt" {% if source == 'openwrt' %}selected{% endif %}>OpenWrt</option>
         </select>
     </label>
+    <label class="field">
+        <span>IP-Zuweisung</span>
+        <select name="ip_mode">
+            <option value="" {% if not ip_mode %}selected{% endif %}>Alle</option>
+            <option value="static" {% if ip_mode == 'static' %}selected{% endif %}>Statisch</option>
+            <option value="dhcp" {% if ip_mode == 'dhcp' %}selected{% endif %}>DHCP</option>
+            <option value="reserved" {% if ip_mode == 'reserved' %}selected{% endif %}>DHCP + reserviert</option>
+            <option value="unknown" {% if ip_mode == 'unknown' %}selected{% endif %}>Unbekannt</option>
+        </select>
+    </label>
     <div class="filter-actions">
         <button type="submit">Filtern</button>
         <a class="reset-link" href="/hosts">Zurücksetzen</a>
@@ -38,7 +48,7 @@
 
 <div class="box">
     <table data-sortable>
-        <thead><tr><th>Hostname</th><th>IP</th><th>MAC</th><th>Status</th><th>Interface</th><th>Last Seen</th><th>Quelle</th><th>Beschreibung</th></tr></thead>
+        <thead><tr><th>Hostname</th><th>IP</th><th>MAC</th><th>Status</th><th>IP-Zuweisung</th><th>Interface</th><th>Last Seen</th><th>Quelle</th><th>Beschreibung</th></tr></thead>
         <tbody>
         {% for host in hosts %}
         <tr class="{% if not host.active %}offline{% endif %}">
@@ -46,15 +56,17 @@
             <td>{{ ip_link(host.ip, host.http_open) }}</td>
             <td><code>{{ host.mac or "-" }}</code></td>
             <td>{% if host.active %}<span class="badge active">aktiv</span>{% else %}<span class="badge stale">inaktiv</span>{% endif %}</td>
+            <td><span class="badge {{ host.ip_mode.css }}" title="{{ host.ip_mode.title }}" aria-label="{{ host.ip_mode.title }}">{{ host.ip_mode.label }}</span></td>
             <td>{{ host.interface_type or "-" }}</td>
             <td>{{ host.last_seen or "-" }}</td>
             <td>{% if host.source %}<span class="badge source-{{ host.source }}">{{ host.source_label }}</span>{% else %}-{% endif %}</td>
             <td>{{ host.description }}</td>
         </tr>
         {% else %}
-        <tr><td colspan="8">Keine Hosts gefunden.</td></tr>
+        <tr><td colspan="9">Keine Hosts gefunden.</td></tr>
         {% endfor %}
         </tbody>
     </table>
+    <p class="hint">🔒 statisch (am Gerät) · 🔄 DHCP (ohne Reservierung) · 📌 DHCP + reserviert</p>
 </div>
 {% endblock %}

@@ -72,7 +72,9 @@ CREATE TABLE IF NOT EXISTS hosts (
     first_seen TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     source TEXT,
-    description TEXT
+    description TEXT,
+    address_source TEXT,
+    static_dhcp INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_hosts_hostname ON hosts(hostname);
 
@@ -84,6 +86,8 @@ CREATE TABLE IF NOT EXISTS host_snapshots (
     mac TEXT,
     active INTEGER NOT NULL DEFAULT 0,
     last_seen TEXT,
+    address_source TEXT,
+    static_dhcp INTEGER,
     PRIMARY KEY (snapshot_id, host_key)
 );
 
@@ -98,6 +102,8 @@ CREATE TABLE IF NOT EXISTS dns_records (
     last_seen TEXT,
     source TEXT,
     updated_at TEXT NOT NULL,
+    address_source TEXT,
+    static_dhcp INTEGER,
     UNIQUE(hostname, ip)
 );
 
@@ -167,8 +173,14 @@ def _ensure_column(
 
 def _migrate_schema(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "dns_records", "source", "source TEXT")
+    _ensure_column(conn, "dns_records", "address_source", "address_source TEXT")
+    _ensure_column(conn, "dns_records", "static_dhcp", "static_dhcp INTEGER")
     _ensure_column(conn, "snapshots", "mwan3_json", "mwan3_json TEXT")
     _ensure_column(conn, "snapshots", "wlan_json", "wlan_json TEXT")
+    _ensure_column(conn, "hosts", "address_source", "address_source TEXT")
+    _ensure_column(conn, "hosts", "static_dhcp", "static_dhcp INTEGER")
+    _ensure_column(conn, "host_snapshots", "address_source", "address_source TEXT")
+    _ensure_column(conn, "host_snapshots", "static_dhcp", "static_dhcp INTEGER")
 
 
 def init_schema(path: Path) -> None:
@@ -314,8 +326,9 @@ def _upsert_hosts(
             """
             INSERT INTO hosts (
                 key, hostname, ip, mac, active, interface_type, last_seen,
-                first_seen, updated_at, source, description
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                first_seen, updated_at, source, description, address_source,
+                static_dhcp
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(key) DO UPDATE SET
                 hostname = COALESCE(NULLIF(excluded.hostname, ''), hosts.hostname),
                 ip = COALESCE(NULLIF(excluded.ip, ''), hosts.ip),
@@ -331,7 +344,11 @@ def _upsert_hosts(
                 source = excluded.source,
                 description = COALESCE(
                     NULLIF(excluded.description, ''), hosts.description
-                )
+                ),
+                address_source = COALESCE(
+                    NULLIF(excluded.address_source, ''), hosts.address_source
+                ),
+                static_dhcp = COALESCE(excluded.static_dhcp, hosts.static_dhcp)
             """,
             (
                 host.key,
@@ -345,13 +362,16 @@ def _upsert_hosts(
                 now,
                 host.source,
                 host.description,
+                host.address_source,
+                None if host.static_dhcp is None else (1 if host.static_dhcp else 0),
             ),
         )
         conn.execute(
             """
             INSERT OR REPLACE INTO host_snapshots (
-                snapshot_id, host_key, hostname, ip, mac, active, last_seen
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                snapshot_id, host_key, hostname, ip, mac, active, last_seen,
+                address_source, static_dhcp
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 snapshot_id,
@@ -361,6 +381,8 @@ def _upsert_hosts(
                 host.mac,
                 1 if host.active else 0,
                 host.last_seen,
+                host.address_source,
+                None if host.static_dhcp is None else (1 if host.static_dhcp else 0),
             ),
         )
 
@@ -369,7 +391,7 @@ def load_hosts(conn: sqlite3.Connection) -> list[HostRecord]:
     rows = conn.execute(
         """
         SELECT key, hostname, ip, mac, active, interface_type, last_seen,
-               source, description
+               source, description, address_source, static_dhcp
         FROM hosts
         ORDER BY lower(COALESCE(hostname, '')), key
         """
@@ -385,6 +407,10 @@ def load_hosts(conn: sqlite3.Connection) -> list[HostRecord]:
             last_seen=row["last_seen"],
             source=row["source"] or "",
             description=row["description"] or "",
+            address_source=row["address_source"] or "",
+            static_dhcp=(
+                None if row["static_dhcp"] is None else bool(row["static_dhcp"])
+            ),
         )
         for row in rows
     ]
@@ -396,8 +422,9 @@ def replace_dns_records(conn: sqlite3.Connection, records: Iterable[DnsRecord]) 
     conn.executemany(
         """
         INSERT INTO dns_records (
-            hostname, fqdn, ip, mac, status, conflict, last_seen, source, updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            hostname, fqdn, ip, mac, status, conflict, last_seen, source,
+            updated_at, address_source, static_dhcp
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         [
             (
@@ -410,6 +437,10 @@ def replace_dns_records(conn: sqlite3.Connection, records: Iterable[DnsRecord]) 
                 record.last_seen,
                 record.source,
                 now,
+                record.address_source,
+                None
+                if record.static_dhcp is None
+                else (1 if record.static_dhcp else 0),
             )
             for record in records
         ],
@@ -420,7 +451,8 @@ def replace_dns_records(conn: sqlite3.Connection, records: Iterable[DnsRecord]) 
 def load_dns_records(conn: sqlite3.Connection) -> list[DnsRecord]:
     rows = conn.execute(
         """
-        SELECT hostname, fqdn, ip, mac, status, conflict, last_seen, source
+        SELECT hostname, fqdn, ip, mac, status, conflict, last_seen, source,
+               address_source, static_dhcp
         FROM dns_records
         ORDER BY lower(fqdn), ip
         """
@@ -435,6 +467,10 @@ def load_dns_records(conn: sqlite3.Connection) -> list[DnsRecord]:
             conflict=row["conflict"],
             last_seen=row["last_seen"],
             source=row["source"] or "",
+            address_source=row["address_source"] or "",
+            static_dhcp=(
+                None if row["static_dhcp"] is None else bool(row["static_dhcp"])
+            ),
         )
         for row in rows
     ]
@@ -862,3 +898,27 @@ def counts(conn: sqlite3.Connection) -> dict:
         ).fetchone()[0],
         "snapshot_id": snapshot_id,
     }
+
+
+def ip_mode_counts(conn: sqlite3.Connection) -> dict[str, int]:
+    result = {"static": 0, "dhcp": 0, "reserved": 0, "unknown": 0}
+    rows = conn.execute(
+        """
+        SELECT address_source, static_dhcp, COUNT(*) AS entries
+        FROM hosts
+        WHERE active = 1
+        GROUP BY address_source, static_dhcp
+        """
+    ).fetchall()
+    for row in rows:
+        source = (row["address_source"] or "").strip().lower()
+        entries = int(row["entries"] or 0)
+        if source == "static":
+            result["static"] += entries
+        elif source == "dhcp" and row["static_dhcp"] == 1:
+            result["reserved"] += entries
+        elif source == "dhcp":
+            result["dhcp"] += entries
+        else:
+            result["unknown"] += entries
+    return result

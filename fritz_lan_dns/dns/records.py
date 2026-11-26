@@ -73,12 +73,18 @@ def build_dns_records(
                 "active": active,
                 "last_seen": last_seen,
                 "source": source,
+                "address_source": host.address_source if host else "",
+                "static_dhcp": host.static_dhcp if host else None,
             }
             return
         existing["active"] = existing["active"] or active
         existing["last_seen"] = max(existing["last_seen"] or "", last_seen or "") or None
         if not existing["mac"] and host and host.mac:
             existing["mac"] = host.mac
+        if not existing["address_source"] and host and host.address_source:
+            existing["address_source"] = host.address_source
+        if existing["static_dhcp"] is None and host and host.static_dhcp is not None:
+            existing["static_dhcp"] = host.static_dhcp
         if _SOURCE_PRIORITY.get(source, 0) > _SOURCE_PRIORITY.get(existing["source"], 0):
             existing["source"] = source
 
@@ -127,6 +133,8 @@ def build_dns_records(
                     conflict=conflict,
                     last_seen=candidate["last_seen"],
                     source=candidate["source"],
+                    address_source=candidate["address_source"],
+                    static_dhcp=candidate["static_dhcp"],
                 )
             )
 
@@ -150,4 +158,6 @@ def _to_record(candidate: dict, domain: str) -> DnsRecord:
         conflict=candidate.get("conflict"),
         last_seen=candidate["last_seen"],
         source=candidate["source"],
+        address_source=candidate["address_source"],
+        static_dhcp=candidate["static_dhcp"],
     )

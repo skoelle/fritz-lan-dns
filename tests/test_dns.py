@@ -81,6 +81,22 @@ def test_openwrt_source_is_kept() -> None:
     assert records[0].status == "active"
 
 
+def test_ip_mode_is_copied_to_dns_records() -> None:
+    host = HostRecord(
+        key="mac:aa:01",
+        hostname="printer",
+        ip="192.0.2.50",
+        mac="aa:01",
+        active=True,
+        source="fritz",
+        address_source="dhcp",
+        static_dhcp=True,
+    )
+    records = build_dns_records([host], [], "example.test")
+    assert records[0].address_source == "dhcp"
+    assert records[0].static_dhcp is True
+
+
 def test_same_mac_multiple_ips_are_written() -> None:
     records = build_dns_records(
         [

@@ -891,3 +891,59 @@ def test_prune_old_snapshots(tmp_path: Path) -> None:
         removed = db.prune_snapshots(conn, 1)
         assert removed == 1
         assert db.latest_snapshot(conn) is None
+
+
+def test_ip_mode_roundtrip_filter_and_dashboard(tmp_path: Path) -> None:
+    settings = _settings(tmp_path)
+    db.init_schema(settings.db_path)
+    hosts = [
+        HostRecord(
+            key="mac:aa:00:00:00:01",
+            hostname="static-host",
+            ip="192.0.2.201",
+            mac="aa:00:00:00:01",
+            active=True,
+            source="fritz",
+            address_source="static",
+        ),
+        HostRecord(
+            key="mac:aa:00:00:00:02",
+            hostname="dhcp-host",
+            ip="192.0.2.202",
+            mac="aa:00:00:00:02",
+            active=True,
+            source="fritz",
+            address_source="dhcp",
+            static_dhcp=False,
+        ),
+        HostRecord(
+            key="mac:aa:00:00:00:03",
+            hostname="reserved-host",
+            ip="192.0.2.203",
+            mac="aa:00:00:00:03",
+            active=True,
+            source="fritz",
+            address_source="dhcp",
+            static_dhcp=True,
+        ),
+    ]
+    with db.connect(settings.db_path) as conn:
+        _store(conn, _mesh(), hosts)
+        loaded = {host.hostname: host for host in db.load_hosts(conn)}
+        assert loaded["static-host"].address_source == "static"
+        assert loaded["static-host"].static_dhcp is None
+        assert loaded["dhcp-host"].static_dhcp is False
+        assert loaded["reserved-host"].static_dhcp is True
+
+        rows = web_data.hosts(conn, ip_mode="reserved")
+        assert len(rows) == 1
+        assert rows[0]["hostname"] == "reserved-host"
+        assert rows[0]["ip_mode"]["label"] == "📌 DHCP"
+
+        dashboard = web_data.dashboard(conn, settings)
+        assert dashboard["ip_modes"] == {
+            "static": 1,
+            "dhcp": 1,
+            "reserved": 1,
+            "unknown": 0,
+        }

@@ -240,11 +240,24 @@ def run_fetch(settings: Settings, legacy_json: Path | None = None) -> dict:
             mesh = parse_mesh(mesh_raw, descriptions)
             mesh_wlan, wlan_parse_error = _parse_mesh_wlan(mesh_raw, mesh)
 
-            host_fetch = client.get_hosts()
-            host_entries = parse_host_entries(host_fetch.entries, descriptions)
             warning = None
             if wlan_parse_error:
                 warning = wlan_parse_error
+
+            static_dhcp_by_mac: dict[str, bool] | None = None
+            try:
+                static_dhcp_by_mac = client.get_static_dhcp_map()
+            except Exception as exc:  # noqa: BLE001 - optionale Anzeige
+                LOGGER.warning("static_dhcp-Abruf fehlgeschlagen: %s", exc)
+                warning = (
+                    (warning + "; " if warning else "")
+                    + f"static_dhcp-Abruf fehlgeschlagen: {exc}"
+                )
+
+            host_fetch = client.get_hosts()
+            host_entries = parse_host_entries(
+                host_fetch.entries, descriptions, static_dhcp_by_mac
+            )
             if host_fetch.errors:
                 host_error = (
                     f"{len(host_fetch.errors)} Host-Einträge konnten nicht gelesen werden"

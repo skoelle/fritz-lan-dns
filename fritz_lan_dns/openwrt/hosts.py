@@ -66,6 +66,7 @@ def parse_openwrt_hosts(
         mac: str | None,
         *,
         active: bool,
+        address_source: str = "",
     ) -> None:
         existing = records.get(key)
         if existing is None:
@@ -76,6 +77,7 @@ def parse_openwrt_hosts(
                 mac=mac,
                 active=active,
                 source="openwrt",
+                address_source=address_source,
             )
             return
         if not existing.hostname and hostname:
@@ -84,6 +86,8 @@ def parse_openwrt_hosts(
             existing.ip = ip
         if not existing.mac and mac:
             existing.mac = mac
+        if not existing.address_source and address_source:
+            existing.address_source = address_source
         existing.active = existing.active or active
 
     for lease in leases.get("dhcp_leases") or []:
@@ -95,7 +99,7 @@ def parse_openwrt_hosts(
         if not ip or not hostname:
             continue
         key = f"mac:{mac}" if mac else f"ip:{ip}"
-        add(key, hostname, ip, mac, active=True)
+        add(key, hostname, ip, mac, active=True, address_source="dhcp")
 
     if include_ipv6:
         for lease in leases.get("dhcp6_leases") or []:
@@ -109,7 +113,7 @@ def parse_openwrt_hosts(
             if not ip or not hostname:
                 continue
             key = f"mac:{mac}" if mac else f"ipv6:{ip}"
-            add(key, hostname, ip, mac, active=True)
+            add(key, hostname, ip, mac, active=True, address_source="dhcp")
 
     for raw_mac, hint in hints.items():
         if not isinstance(hint, dict):

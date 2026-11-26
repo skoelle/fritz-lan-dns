@@ -133,6 +133,10 @@ pre {
 .badge.source-fritz-repeater { background: #eef5ff; color: #1d4f91; }
 .badge.source-openwrt { background: #fdeee0; color: #a04d00; }
 .badge.source-static { background: #e6f4ea; color: var(--green); }
+.badge.ip-static { background: #e6f4ea; color: var(--green); }
+.badge.ip-dhcp { background: #eef1f4; color: #4b5563; }
+.badge.ip-reserved { background: #e7f0fb; color: #1a4f8a; }
+.badge.ip-unknown { background: #f1f1f1; color: #888; }
 
 .alert { padding: 0.85rem 1rem; border-radius: 6px; margin-bottom: 1rem; font-size: 0.9rem; }
 .alert.error { background: #fde8e6; color: var(--red); }

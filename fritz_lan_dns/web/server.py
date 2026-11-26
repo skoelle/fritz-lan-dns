@@ -15,7 +15,7 @@ from .. import db
 from ..config import ConfigError, build_settings
 from ..dns import ensure_dns_files
 from ..scheduler import FetchScheduler
-from ..util import http_url, source_label
+from ..util import http_url, ip_mode_meta, source_label
 from . import data as web_data
 
 LOGGER = logging.getLogger("fritz_lan_dns.web")
@@ -56,6 +56,7 @@ app.mount("/static", StaticFiles(directory=str(BASE / "static")), name="static")
 templates = Jinja2Templates(directory=str(BASE / "templates"))
 templates.env.globals["http_url"] = http_url
 templates.env.globals["source_label"] = source_label
+templates.env.globals["ip_mode_meta"] = ip_mode_meta
 
 
 def _conn():
@@ -94,6 +95,7 @@ def api_status() -> JSONResponse:
     with _conn() as conn:
         latest = db.latest_snapshot(conn)
         counts = db.counts(conn)
+        ip_modes = db.ip_mode_counts(conn)
         open_ips = db.load_http_open_ips(conn)
         mwan3 = web_data.mwan3_view(db.latest_mwan3(conn))
         wlan = web_data.wlan_view(db.latest_wlan(conn), open_ips)
@@ -103,6 +105,7 @@ def api_status() -> JSONResponse:
             "scheduler": scheduler.status(),
             "latest": latest,
             "counts": counts,
+            "ip_modes": ip_modes,
             "mwan3": mwan3,
             "wlan": wlan["summary"] if wlan else None,
             "wlan_events": wlan_events,
@@ -142,9 +145,13 @@ def api_topology() -> JSONResponse:
 
 
 @app.get("/api/hosts")
-def api_hosts(q: str = "", status: str = "", source: str = "") -> JSONResponse:
+def api_hosts(
+    q: str = "", status: str = "", source: str = "", ip_mode: str = ""
+) -> JSONResponse:
     with _conn() as conn:
-        rows = web_data.hosts(conn, query=q, status=status, source=source)
+        rows = web_data.hosts(
+            conn, query=q, status=status, source=source, ip_mode=ip_mode
+        )
     return JSONResponse({"hosts": rows})
 
 
@@ -240,10 +247,16 @@ def wlan_page(request: Request, days: int = 7, all: int = 0) -> HTMLResponse:
 
 @app.get("/hosts", response_class=HTMLResponse)
 def hosts_page(
-    request: Request, q: str = "", status: str = "", source: str = ""
+    request: Request,
+    q: str = "",
+    status: str = "",
+    source: str = "",
+    ip_mode: str = "",
 ) -> HTMLResponse:
     with _conn() as conn:
-        rows = web_data.hosts(conn, query=q, status=status, source=source)
+        rows = web_data.hosts(
+            conn, query=q, status=status, source=source, ip_mode=ip_mode
+        )
         latest = db.latest_snapshot(conn)
     return templates.TemplateResponse(
         request,
@@ -255,6 +268,7 @@ def hosts_page(
             "query": q,
             "status": status,
             "source": source,
+            "ip_mode": ip_mode,
             "latest": latest,
         },
     )

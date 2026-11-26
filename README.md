@@ -32,6 +32,7 @@ Owner-Namen `foo.<dns-domain>.` zurückgeschrieben.
 - Optional: zweite Host-Quelle OpenWrt (DHCP-Leases + statische Hosts) via ubus
 - Webinterface für Dashboard, Topologie, WLAN, Hosts, DNS und Historie
 - DNS-Records aus Hostnamen und IPs, inkl. Konflikt-Erkennung und Quellenangabe
+- IP-Zuweisung pro Host: statisch, DHCP oder DHCP mit dauerhafter Zuweisung
 - `dns/hosts` für CoreDNS, `dns/<dns-domain>.zone` als Export
 - MISS-Fallback: unbekannte `foo.<dns-domain>` werden als `foo.fritz.box.` an
   die FRITZ!Box gefragt (Default; `bare` ist konfigurierbar); Antworten werden
@@ -435,6 +436,25 @@ Repeater-Anmeldefehler) sind standardmäßig ausgeblendet und über
 `/wlan?all=1` sichtbar. Login- und Nicht-WLAN-Ereignisse werden ignoriert.
 Das Roh-Log wird nicht abgelegt; die Events laufen nach
 `EVENT_RETENTION_DAYS` (Default 90) aus.
+
+## IP-Zuweisung
+
+Hosts, DNS und Dashboard zeigen pro Eintrag ein kombiniertes Badge:
+
+- `🔒 statisch`: Das Gerät hat die IP selbst fest konfiguriert
+  (`NewAddressSource=Static`).
+- `🔄 DHCP`: DHCP ohne dauerhafte Zuweisung.
+- `📌 DHCP`: DHCP, aber die FRITZ!Box hat „IPv4-Adresse dauerhaft zuweisen“
+  aktiviert.
+- `–`: keine Zuweisungsdaten bekannt.
+
+Die Zuweisungsart kommt aus TR-064 (`NewAddressSource`), das
+Reservierungs-Flag `static_dhcp` aus der FRITZ!Box-internen `query.lua`.
+Diese Route ist undokumentiert und kann sich mit FRITZ!OS ändern; schlägt der
+Abruf fehl, bleibt die Reservierung unbekannt und der Rest des Abrufs läuft
+weiter. Die dabei verwendete SID wird nicht gespeichert und nicht geloggt.
+`/hosts` hat einen Filter für die Zuweisungsart; `/api/hosts` und `/api/dns`
+enthalten `address_source` und `static_dhcp`.
 
 ## Webinterface
 

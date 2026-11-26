@@ -89,3 +89,31 @@ def test_client_fetches_device_log_text(monkeypatch) -> None:
         client.fetch_device_log_text("/devicelog.lua?sid=test", 49443)
         == "<DeviceLog></DeviceLog>"
     )
+
+
+class FakeJsonResponse:
+    status_code = 200
+
+    def json(self) -> dict:
+        return {
+            "network": [
+                {"mac": "AA:BB:CC:00:00:01", "static_dhcp": "1"},
+                {"mac": "AA:BB:CC:00:00:02", "static_dhcp": "0"},
+            ]
+        }
+
+
+def test_client_reads_static_dhcp_map(monkeypatch) -> None:
+    client = FritzClient("192.0.2.10", "user", "password")
+    monkeypatch.setattr(
+        client,
+        "soap",
+        lambda *args, **kwargs: {
+            "NewX_AVM-DE_HostListPath": "/devicehostlist.lua?sid=test"
+        },
+    )
+    monkeypatch.setattr(client, "_get", lambda url: FakeJsonResponse())
+    assert client.get_static_dhcp_map() == {
+        "aa:bb:cc:00:00:01": True,
+        "aa:bb:cc:00:00:02": False,
+    }

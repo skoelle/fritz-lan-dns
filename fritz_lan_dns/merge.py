@@ -19,6 +19,10 @@ def _merge_into(target: HostRecord, source: HostRecord) -> None:
         target.description = source.description
     if not target.last_seen and source.last_seen:
         target.last_seen = source.last_seen
+    if not target.address_source and source.address_source:
+        target.address_source = source.address_source
+    if target.static_dhcp is None and source.static_dhcp is not None:
+        target.static_dhcp = source.static_dhcp
     target.active = target.active or source.active
     if _SOURCE_RANK.get(source.source, 0) > _SOURCE_RANK.get(target.source, 0):
         target.source = source.source

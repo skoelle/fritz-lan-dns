@@ -7,7 +7,7 @@ from fritz_lan_dns.fritz.hosts import parse_host_entries
 from fritz_lan_dns.fritz.mesh import parse_mesh
 from fritz_lan_dns.merge import merge_hosts
 from fritz_lan_dns.models import HostRecord
-from fritz_lan_dns.util import device_description, format_duration
+from fritz_lan_dns.util import device_description, format_duration, ip_mode_meta
 
 FIXTURE = Path(__file__).parent / "fixtures" / "mesh.json"
 
@@ -40,6 +40,47 @@ def test_parse_host_entries() -> None:
     assert hosts[0].active is True
     assert hosts[0].description == "Router"
     assert hosts[1].active is False
+
+
+def test_parse_host_entries_sets_ip_mode() -> None:
+    entries = _entries()
+    entries[0]["NewAddressSource"] = "Static"
+    entries[1]["NewAddressSource"] = "DHCP"
+    hosts = parse_host_entries(
+        entries,
+        static_dhcp_by_mac={"aa:bb:cc:00:00:02": True},
+    )
+    assert hosts[0].address_source == "static"
+    assert hosts[0].static_dhcp is None
+    assert hosts[1].address_source == "dhcp"
+    assert hosts[1].static_dhcp is True
+
+
+def test_merge_keeps_known_ip_mode_from_fritz() -> None:
+    fritz = HostRecord(
+        key="mac:aa:bb:cc:00:00:01",
+        hostname="printer",
+        ip="192.0.2.50",
+        mac="AA:BB:CC:00:00:01",
+        active=True,
+        source="fritz",
+        address_source="dhcp",
+        static_dhcp=True,
+    )
+    openwrt = HostRecord(
+        key="openwrt:mac:aa:bb:cc:00:00:01",
+        hostname="printer",
+        ip="192.0.2.50",
+        mac="AA:BB:CC:00:00:01",
+        active=True,
+        source="openwrt",
+        address_source="dhcp",
+        static_dhcp=None,
+    )
+    hosts = merge_hosts([fritz], [], extra_hosts=[openwrt])
+    assert len(hosts) == 1
+    assert hosts[0].address_source == "dhcp"
+    assert hosts[0].static_dhcp is True
 
 
 def test_merge_fritz_and_mesh_hosts() -> None:
@@ -113,6 +154,13 @@ def test_format_duration() -> None:
     assert format_duration(3600) == "1h 0m"
     assert format_duration(3660) == "1h 1m"
     assert format_duration(90000) == "1d 1h"
+
+
+def test_ip_mode_meta() -> None:
+    assert ip_mode_meta("static", None)["label"] == "🔒 statisch"
+    assert ip_mode_meta("dhcp", False)["label"] == "🔄 DHCP"
+    assert ip_mode_meta("dhcp", True)["label"] == "📌 DHCP"
+    assert ip_mode_meta("", None)["label"] == "–"
 
 
 def test_device_description_lookup() -> None:

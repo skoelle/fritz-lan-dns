@@ -61,6 +61,50 @@ def source_filter_values(source: str | None) -> tuple[str, ...]:
     return SOURCE_FILTER_GROUPS.get(value, (value,) if value else ())
 
 
+def ip_mode_meta(
+    address_source: str | None,
+    static_dhcp: bool | int | str | None,
+    source: str | None = "",
+) -> dict[str, str]:
+    value = (address_source or "").strip().lower()
+    reservation: bool | None
+    if isinstance(static_dhcp, str):
+        reservation = static_dhcp.strip().lower() in ("1", "true", "yes", "on")
+    elif static_dhcp is None:
+        reservation = None
+    else:
+        reservation = bool(static_dhcp)
+
+    if value == "static":
+        return {
+            "label": "🔒 statisch",
+            "css": "ip-static",
+            "title": "IP ist am Gerät fest eingestellt",
+        }
+    if value == "dhcp":
+        if reservation is True:
+            return {
+                "label": "📌 DHCP",
+                "css": "ip-reserved",
+                "title": "DHCP, FRITZ!Box weist die IP dauerhaft zu",
+            }
+        if reservation is False:
+            return {
+                "label": "🔄 DHCP",
+                "css": "ip-dhcp",
+                "title": "DHCP ohne dauerhafte Zuweisung",
+            }
+        title = "DHCP, Reservierung unbekannt"
+        if (source or "").strip().lower() == "openwrt":
+            title += " (OpenWrt)"
+        return {"label": "🔄 DHCP", "css": "ip-dhcp", "title": title}
+    return {
+        "label": "–",
+        "css": "ip-unknown",
+        "title": "Zuweisung unbekannt",
+    }
+
+
 def format_duration(value: object) -> str:
     if value is None or value == "":
         return "-"

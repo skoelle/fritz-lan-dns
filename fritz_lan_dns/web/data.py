@@ -12,6 +12,7 @@ from ..models import HostRecord, MeshNode
 from ..util import (
     format_duration,
     http_url,
+    ip_mode_meta,
     source_filter_values,
     source_label,
 )
@@ -540,6 +541,7 @@ def dashboard(conn: sqlite3.Connection, settings: Settings) -> dict:
         "history": history_rows,
         "failed": dict(failed_latest) if failed_latest else None,
         "counts": counts,
+        "ip_modes": db.ip_mode_counts(conn),
         "conflicts": [record for record in dns_records if record.status == "conflict"],
         "http_open_ips": open_ips,
         "mwan3": mwan3_view(db.latest_mwan3(conn)),
@@ -733,6 +735,7 @@ def hosts(
     query: str = "",
     status: str = "",
     source: str = "",
+    ip_mode: str = "",
 ) -> list[dict]:
     clauses: list[str] = []
     params: list[object] = []
@@ -747,6 +750,22 @@ def hosts(
         clauses.append("active = 1")
     elif status == "inactive":
         clauses.append("active = 0")
+    if ip_mode == "static":
+        clauses.append("lower(COALESCE(address_source, '')) = 'static'")
+    elif ip_mode == "dhcp":
+        clauses.append(
+            "lower(COALESCE(address_source, '')) = 'dhcp' "
+            "AND COALESCE(static_dhcp, 0) = 0"
+        )
+    elif ip_mode == "reserved":
+        clauses.append(
+            "lower(COALESCE(address_source, '')) = 'dhcp' AND static_dhcp = 1"
+        )
+    elif ip_mode == "unknown":
+        clauses.append(
+            "(COALESCE(address_source, '') = '' "
+            "OR (lower(address_source) = 'dhcp' AND static_dhcp IS NULL))"
+        )
     source_values = source_filter_values(source)
     if source_values:
         placeholders = ", ".join("?" for _ in source_values)
@@ -756,7 +775,8 @@ def hosts(
     rows = conn.execute(
         f"""
         SELECT key, hostname, ip, mac, active, interface_type, last_seen,
-               source, description, first_seen, updated_at
+               source, description, first_seen, updated_at, address_source,
+               static_dhcp
         FROM hosts {where}
         ORDER BY active DESC, lower(COALESCE(hostname, '')), key
         """,
@@ -769,6 +789,9 @@ def hosts(
             "http_open": row["ip"] in open_ips,
             "http_url": http_url(row["ip"]) if row["ip"] in open_ips else None,
             "source_label": source_label(row["source"]),
+            "ip_mode": ip_mode_meta(
+                row["address_source"], row["static_dhcp"], row["source"]
+            ),
         }
         for row in rows
     ]

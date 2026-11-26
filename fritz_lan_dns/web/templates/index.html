@@ -36,6 +36,11 @@
         {% endif %}
     </div>
     <div class="box stat-box"><div class="box-title">HTTP :80</div><div class="stat-value">{{ counts.http_open }}</div><div class="stat-label">offene Webports</div></div>
+    <div class="box stat-box">
+        <div class="box-title">IP-Zuweisung</div>
+        <div class="stat-value">{{ ip_modes.static + ip_modes.dhcp + ip_modes.reserved + ip_modes.unknown }}</div>
+        <div class="stat-label">🔒 {{ ip_modes.static }} · 🔄 {{ ip_modes.dhcp }} · 📌 {{ ip_modes.reserved }} · – {{ ip_modes.unknown }}</div>
+    </div>
 </div>
 
 {% if wlan %}

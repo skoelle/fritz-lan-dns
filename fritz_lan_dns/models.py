@@ -117,6 +117,8 @@ class HostRecord:
     last_seen: str | None = None
     source: str = "fritz"
     description: str = ""
+    address_source: str = ""
+    static_dhcp: bool | None = None
 
 
 @dataclass
@@ -129,6 +131,8 @@ class DnsRecord:
     conflict: str | None = None
     last_seen: str | None = None
     source: str = ""
+    address_source: str = ""
+    static_dhcp: bool | None = None
 
     @property
     def writable(self) -> bool:
