@@ -37,6 +37,101 @@ def test_parse_mesh_deduplicates_links() -> None:
     assert pairs.count(("uuid-powerline", "uuid-repeater")) == 1
 
 
+def _raw_wlan_link(master_freq: int, client_freq: int) -> dict:
+    return {
+        "nodes": [
+            {
+                "uid": "master",
+                "device_name": "router",
+                "device_model": "",
+                "mesh_role": "master",
+                "ip_addresses": [],
+                "node_interfaces": [
+                    {
+                        "type": "WLAN",
+                        "name": "",
+                        "current_channel": 0,
+                        "current_channel_info": {"primary_freq": master_freq},
+                        "node_links": [
+                            {
+                                "node_1_uid": "master",
+                                "node_2_uid": "client",
+                                "state": "CONNECTED",
+                            }
+                        ],
+                    }
+                ],
+            },
+            {
+                "uid": "client",
+                "device_name": "client",
+                "device_model": "",
+                "mesh_role": "client",
+                "ip_addresses": [],
+                "node_interfaces": [
+                    {
+                        "type": "WLAN",
+                        "name": "",
+                        "current_channel": 0,
+                        "current_channel_info": {"primary_freq": client_freq},
+                        "node_links": [
+                            {
+                                "node_1_uid": "client",
+                                "node_2_uid": "master",
+                                "state": "CONNECTED",
+                            }
+                        ],
+                    }
+                ],
+            },
+        ]
+    }
+
+
+def test_parse_mesh_derives_wlan_band_from_frequency() -> None:
+    mesh_2g = parse_mesh(_raw_wlan_link(2437000, 2462000))
+    by_name = {node.device_name: node for node in mesh_2g.nodes}
+    assert by_name["client"].connection_type == "WLAN 2G"
+
+    mesh_5g = parse_mesh(_raw_wlan_link(5180000, 5540000))
+    by_name = {node.device_name: node for node in mesh_5g.nodes}
+    assert by_name["client"].connection_type == "WLAN 5G"
+
+
+def test_parse_mesh_derives_offline_band_from_frequency() -> None:
+    raw = {
+        "nodes": [
+            {
+                "uid": "master",
+                "device_name": "router",
+                "device_model": "",
+                "mesh_role": "master",
+                "ip_addresses": [],
+                "node_interfaces": [],
+            },
+            {
+                "uid": "lost",
+                "device_name": "lost",
+                "device_model": "",
+                "mesh_role": "unknown",
+                "ip_addresses": [],
+                "node_interfaces": [
+                    {
+                        "type": "WLAN",
+                        "name": "",
+                        "current_channel": 0,
+                        "current_channel_info": {"primary_freq": 2462000},
+                    }
+                ],
+            },
+        ]
+    }
+    mesh = parse_mesh(raw)
+    lost = next(node for node in mesh.nodes if node.device_name == "lost")
+    assert lost.online is False
+    assert lost.connection_type == "WLAN 2G"
+
+
 def _raw_with_addresses(addresses: list[dict]) -> dict:
     return {
         "nodes": [

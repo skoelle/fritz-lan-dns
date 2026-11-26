@@ -23,7 +23,7 @@ Owner-Namen `foo.<dns-domain>.` zurückgeschrieben.
 ## Funktionen
 
 - Stündlicher Abruf per eingebautem Scheduler
-- Mesh-Topologie inkl. LAN/WLAN/PLC-Verbindungen und PLC-Raten
+- Mesh-Topologie inkl. LAN/WLAN/PLC-Verbindungen, WLAN-Band (2,4/5/6 GHz) und PLC-Raten
 - WLAN-Übersicht mit Radios, Kanälen, Kanalbreite, Auslastung, SSID,
   Sicherheit und verbundenen Clients inkl. Signal
 - WLAN-Auffälligkeiten aus dem FRITZ!Box-Ereignisprotokoll
@@ -459,7 +459,8 @@ enthalten `address_source` und `static_dhcp`.
 ## Webinterface
 
 - `/` Dashboard: letzter Lauf, Zähler, WLAN, MultiWAN, Konflikte, Historie, Refresh
-- `/topology`: Mesh-Baum und Offline-Geräte
+- `/topology`: Mesh-Baum und Offline-Geräte; die Spalte „Verbindung“ zeigt bei
+  WLAN-Geräten das Band (auch als letztes bekanntes Band bei Offline-Geräten)
 - `/wlan`: WLAN-Radios pro Gerät, WLAN-Clients inkl. Signal und
   Auffälligkeiten aus dem Ereignisprotokoll (`?all=1` zeigt alle WLAN-Events)
 - `/hosts`: alle bekannten Hosts, Suche, Status- und Quellen-Filter

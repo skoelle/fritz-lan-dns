@@ -6,6 +6,7 @@ from typing import Any
 
 from ..models import MeshLink, MeshNode, MeshSnapshot
 from ..util import parse_int
+from .wlan import band_from_channel, band_from_frequency, band_from_interface_name
 
 
 class MeshParseError(ValueError):
@@ -74,18 +75,40 @@ def _find_mac(node: dict[str, Any]) -> str | None:
     return None
 
 
+_BAND_CONNECTION = {
+    "2.4 GHz": "WLAN 2G",
+    "5 GHz": "WLAN 5G",
+    "6 GHz": "WLAN 6G",
+}
+
+
+def _wlan_band(interface: dict[str, Any]) -> str:
+    info = interface.get("current_channel_info")
+    info = info if isinstance(info, dict) else {}
+    return (
+        band_from_frequency(info.get("primary_freq"))
+        or band_from_interface_name(str(interface.get("name") or ""))
+        or band_from_channel(parse_int(interface.get("current_channel")))
+    )
+
+
 def _connection_type(interface: dict[str, Any]) -> str:
     iface_type = str(interface.get("type", "")).upper()
-    name = str(interface.get("name", ""))
     if iface_type == "WLAN":
-        if "2" in name:
-            return "WLAN 2G"
-        if "5" in name:
-            return "WLAN 5G"
-        if "6" in name:
-            return "WLAN 6G"
-        return "WLAN"
+        return _BAND_CONNECTION.get(_wlan_band(interface), "WLAN")
     return iface_type or "UNKNOWN"
+
+
+def _offline_connection_type(node: dict[str, Any]) -> str:
+    for interface in node.get("node_interfaces") or []:
+        if not isinstance(interface, dict):
+            continue
+        if str(interface.get("type", "")).upper() != "WLAN":
+            continue
+        label = _BAND_CONNECTION.get(_wlan_band(interface))
+        if label:
+            return label
+    return ""
 
 
 def _rate(link: dict[str, Any], direction: str) -> int | None:
@@ -195,6 +218,17 @@ def parse_mesh(raw: dict[str, Any], descriptions: dict[str, str] | None = None) 
                     node.plc_rx_kbps = link.rx_kbps
                     node.plc_tx_kbps = link.tx_kbps
                 queue.append(target_uid)
+
+    for item in raw_nodes:
+        if not isinstance(item, dict):
+            continue
+        uid = str(item.get("uid") or "").strip()
+        node = nodes_by_id.get(uid)
+        if node is None or node.online or node.connection_type:
+            continue
+        label = _offline_connection_type(item)
+        if label:
+            node.connection_type = label
 
     nodes = sorted(nodes_by_id.values(), key=lambda node: node.device_name.lower())
     return MeshSnapshot(nodes=nodes, links=links, master_uid=master_uid, raw=raw)

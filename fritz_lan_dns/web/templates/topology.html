@@ -122,7 +122,13 @@
                 <span class="device-indent" style="--depth: {{ row.indent }}">{{ row.node.device_name }}</span>
                 {% if row.source == 'openwrt' %}<span class="badge source-openwrt">OpenWrt</span>{% endif %}
             </td>
-            <td>-</td>
+            <td>
+                {% if row.connection_label %}
+                <span class="chip {{ row.connection_class }}">
+                    <span aria-hidden="true">{{ row.connection_icon }}</span> {{ row.connection_label }}
+                </span>
+                {% else %}-{% endif %}
+            </td>
             <td>{% if row.role_label %}<span class="chip role-chip">{{ row.role_label }}</span>{% endif %}</td>
             <td class="muted-cell">{{ row.node.device_model or "-" }}</td>
             <td>{{ ip_link(row.node.ip, row.node.ip in http_open_ips) }}</td>
