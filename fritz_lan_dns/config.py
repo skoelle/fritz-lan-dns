@@ -96,7 +96,6 @@ class Settings:
     dns_include_ipv6: bool
     dns_fallback_enabled: bool
     dns_fallback_mode: str
-    dns_fallback_upstream: str
     dns_ns_ip: str
     dns_container_root: str
     fritz_timeout: int
@@ -118,6 +117,10 @@ class Settings:
     @property
     def db_path(self) -> Path:
         return self.db_root / "fritz_lan_dns.db"
+
+    @property
+    def dns_fallback_target(self) -> str:
+        return f"{self.box_ip}:53" if self.box_ip else ""
 
     @property
     def hosts_file(self) -> Path:
@@ -172,8 +175,8 @@ class Settings:
         missing = []
         if not self.dns_domain:
             missing.append("DNS_DOMAIN")
-        if self.dns_fallback_enabled and not self.dns_fallback_upstream:
-            missing.append("DNS_FALLBACK_UPSTREAM")
+        if self.dns_fallback_enabled and not self.dns_fallback_target:
+            missing.append("BoxIP")
         if missing:
             raise ConfigError(
                 "Fehlende DNS-Konfiguration: "
@@ -214,8 +217,6 @@ def build_settings(env_file: Path | None = None) -> Settings:
         dns_include_ipv6=_env_bool("DNS_INCLUDE_IPV6", False),
         dns_fallback_enabled=_env_bool("DNS_FALLBACK_ENABLED", True),
         dns_fallback_mode=(_env("DNS_FALLBACK_MODE") or "fritz.box").lower(),
-        dns_fallback_upstream=_env("DNS_FALLBACK_UPSTREAM")
-        or (f"{box_ip}:53" if box_ip else ""),
         dns_ns_ip=_env("DNS_NS_IP") or "",
         dns_container_root=_env("DNS_CONTAINER_ROOT") or "/zones",
         fritz_timeout=fritz_timeout,

@@ -33,7 +33,6 @@ def make_settings(tmp_path: Path, **overrides) -> Settings:
         "dns_include_ipv6": False,
         "dns_fallback_enabled": True,
         "dns_fallback_mode": "bare",
-        "dns_fallback_upstream": "192.0.2.1:53",
         "dns_ns_ip": "192.0.2.10",
         "dns_container_root": "/zones",
         "fritz_timeout": 25,

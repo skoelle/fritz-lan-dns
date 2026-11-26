@@ -84,10 +84,9 @@ DNS_ZONE_TTL=60
 DNS_INCLUDE_IPV6=0
 DNS_HOST_RETENTION_DAYS=90
 
-# MISS-Fallback direkt zur FRITZ!Box
+# MISS-Fallback direkt zur FRITZ!Box (<BoxIP>:53)
 DNS_FALLBACK_ENABLED=1
 DNS_FALLBACK_MODE=fritz.box
-DNS_FALLBACK_UPSTREAM=192.0.2.1:53
 
 # Optional: A-Record für ns1.<dns-domain>
 DNS_NS_IP=192.0.2.10

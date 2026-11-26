@@ -127,3 +127,16 @@ def test_parse_mesh_falls_back_to_only_link_local_ip() -> None:
         ]
     )
     assert parse_mesh(raw).nodes[0].ip == "169.254.154.224"
+
+
+def test_parse_mesh_uses_neighbour_only_ip_as_fallback() -> None:
+    raw = _raw_with_addresses(
+        [
+            {
+                "version": "V4",
+                "value": "192.0.2.22/24",
+                "attributes": ["NEIGHBOUR_LIST"],
+            }
+        ]
+    )
+    assert parse_mesh(raw).nodes[0].ip == "192.0.2.22"

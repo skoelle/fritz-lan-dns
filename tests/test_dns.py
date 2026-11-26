@@ -153,6 +153,7 @@ def test_corefile_fallback_and_disabled(tmp_path) -> None:
     assert "answer name ^([^.]+)\\.$ {1}.example.test." in enabled
     assert 'log . "{name} {type} {rcode}"' in enabled
     assert "forward . 127.0.0.1:5354" in enabled
+    assert "forward . 192.0.2.1:53" in enabled
     assert ".:53 {" not in enabled
     assert "health :8080" in enabled
     assert "ready :8181" in enabled

@@ -10,13 +10,13 @@ def test_require_dns_reports_missing_values(tmp_path) -> None:
     settings = make_settings(
         tmp_path,
         dns_domain="",
-        dns_fallback_upstream="",
+        box_ip="",
     )
     with pytest.raises(ConfigError) as exc:
         settings.require_dns()
     message = str(exc.value)
     assert "DNS_DOMAIN" in message
-    assert "DNS_FALLBACK_UPSTREAM" in message
+    assert "BoxIP" in message
 
 
 def test_require_fetch_reports_missing_values(tmp_path) -> None:
@@ -35,6 +35,11 @@ def test_require_dns_accepts_complete_settings(tmp_path) -> None:
     settings.require_fetch()
 
 
+def test_dns_fallback_target_derives_from_box_ip(tmp_path) -> None:
+    settings = make_settings(tmp_path, box_ip="192.0.2.1")
+    assert settings.dns_fallback_target == "192.0.2.1:53"
+
+
 def test_build_settings_has_no_private_defaults(tmp_path, monkeypatch) -> None:
     for key in (
         "BoxIP",
@@ -45,7 +50,6 @@ def test_build_settings_has_no_private_defaults(tmp_path, monkeypatch) -> None:
         "BOX_PW",
         "DNS_DOMAIN",
         "DNS_FALLBACK_MODE",
-        "DNS_FALLBACK_UPSTREAM",
         "OPENWRT_ENABLED",
         "OPENWRT_URL",
         "OPENWRT_USER",
@@ -64,7 +68,7 @@ def test_build_settings_has_no_private_defaults(tmp_path, monkeypatch) -> None:
     assert settings.box_pw == ""
     assert settings.dns_domain == ""
     assert settings.dns_fallback_mode == "fritz.box"
-    assert settings.dns_fallback_upstream == ""
+    assert settings.dns_fallback_target == ""
     assert settings.openwrt_enabled is False
     assert settings.openwrt_url == ""
     assert settings.openwrt_user == ""

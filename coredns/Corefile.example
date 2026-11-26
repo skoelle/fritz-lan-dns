@@ -4,7 +4,7 @@
 #
 # CoreDNS only answers the local domain; everything else is refused, so the
 # container is not an open resolver. Known hosts come from the hosts file,
-# misses are rewritten to bare names and forwarded to the FRITZ!Box.
+# misses are rewritten to <name>.fritz.box and forwarded to the FRITZ!Box.
 
 example.test:53 {
     errors
@@ -26,8 +26,8 @@ example.test:53 {
     errors
     log . "{name} {type} {rcode}"
     rewrite stop {
-        name regex ^([^.]+)\.example\.test\.$ {1}.
-        answer name ^([^.]+)\.$ {1}.example.test.
+        name regex ^([^.]+)\.example\.test\.$ {1}.fritz.box.
+        answer name ^([^.]+)\.fritz\.box\.$ {1}.example.test.
     }
     forward . 192.0.2.1:53
 }

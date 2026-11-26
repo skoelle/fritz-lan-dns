@@ -12,7 +12,7 @@
 <div class="stat-grid">
     <div class="box stat-box"><div class="box-title">Records</div><div class="stat-value">{{ records|length }}</div><div class="stat-label">inkl. Konflikte</div></div>
     <div class="box stat-box"><div class="box-title">Konflikte</div><div class="stat-value">{{ conflicts|length }}</div><div class="stat-label">nicht geschrieben</div></div>
-    <div class="box stat-box"><div class="box-title">Fallback</div><div class="stat-value stat-value-small">{% if settings.dns_fallback_enabled %}{{ settings.dns_fallback_mode }}{% else %}aus{% endif %}</div><div class="stat-label">{{ settings.dns_fallback_upstream }}</div></div>
+    <div class="box stat-box"><div class="box-title">Fallback</div><div class="stat-value stat-value-small">{% if settings.dns_fallback_enabled %}{{ settings.dns_fallback_mode }}{% else %}aus{% endif %}</div><div class="stat-label">{{ settings.dns_fallback_target }}</div></div>
     <div class="box stat-box"><div class="box-title">CoreDNS</div><div class="stat-value stat-value-small">Port 53</div><div class="stat-label">Pi-hole delegiert hierher</div></div>
 </div>
 

@@ -102,7 +102,7 @@ def corefile_content(settings: Settings) -> str:
             f"        name regex ^([^.]+)\\.{escaped_domain}\\.$ {replacement}",
             f"        answer name {answer_pattern} {{1}}.{domain}.",
             "    }",
-            f"    forward . {settings.dns_fallback_upstream}",
+            f"    forward . {settings.dns_fallback_target}",
             "}",
         ]
         return "\n".join(head + fallback) + "\n"
