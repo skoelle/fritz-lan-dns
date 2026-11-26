@@ -83,10 +83,11 @@ def ip_mode_meta(
         }
     if value == "dhcp":
         if reservation is True:
+            router = "OpenWrt" if (source or "").strip().lower() == "openwrt" else "FRITZ!Box"
             return {
                 "label": "📌 DHCP",
                 "css": "ip-reserved",
-                "title": "DHCP, FRITZ!Box weist die IP dauerhaft zu",
+                "title": f"DHCP, {router} weist die IP dauerhaft zu",
             }
         if reservation is False:
             return {

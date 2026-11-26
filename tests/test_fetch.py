@@ -110,6 +110,20 @@ class FakeOpenWrt:
             }
         }
 
+    def get_static_leases(self) -> list[dict]:
+        return [
+            {
+                "name": "owrt-nas",
+                "ip": "192.0.2.150",
+                "macs": ["aa:bb:cc:00:00:10"],
+            },
+            {
+                "name": "owrt-printer",
+                "ip": "192.0.2.151",
+                "macs": ["aa:bb:cc:00:00:11"],
+            },
+        ]
+
     def get_network_interfaces(self) -> dict:
         return {
             "interface": [

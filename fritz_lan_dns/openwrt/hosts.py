@@ -54,10 +54,19 @@ def parse_openwrt_hosts(
     hints: dict[str, Any] | None,
     *,
     include_ipv6: bool = False,
+    static_leases: list[dict[str, Any]] | None = None,
 ) -> list[HostRecord]:
     leases = leases or {}
     hints = hints or {}
     records: dict[str, HostRecord] = {}
+    static_macs: set[str] | None = None
+    if static_leases is not None:
+        static_macs = {
+            mac
+            for entry in static_leases
+            for mac in (entry.get("macs") or [])
+            if mac
+        }
 
     def add(
         key: str,
@@ -67,6 +76,7 @@ def parse_openwrt_hosts(
         *,
         active: bool,
         address_source: str = "",
+        static_dhcp: bool | None = None,
     ) -> None:
         existing = records.get(key)
         if existing is None:
@@ -78,6 +88,7 @@ def parse_openwrt_hosts(
                 active=active,
                 source="openwrt",
                 address_source=address_source,
+                static_dhcp=static_dhcp,
             )
             return
         if not existing.hostname and hostname:
@@ -88,6 +99,8 @@ def parse_openwrt_hosts(
             existing.mac = mac
         if not existing.address_source and address_source:
             existing.address_source = address_source
+        if existing.static_dhcp is None and static_dhcp is not None:
+            existing.static_dhcp = static_dhcp
         existing.active = existing.active or active
 
     for lease in leases.get("dhcp_leases") or []:
@@ -99,7 +112,18 @@ def parse_openwrt_hosts(
         if not ip or not hostname:
             continue
         key = f"mac:{mac}" if mac else f"ip:{ip}"
-        add(key, hostname, ip, mac, active=True, address_source="dhcp")
+        reserved = None
+        if static_macs is not None and mac:
+            reserved = mac in static_macs
+        add(
+            key,
+            hostname,
+            ip,
+            mac,
+            active=True,
+            address_source="dhcp",
+            static_dhcp=reserved,
+        )
 
     if include_ipv6:
         for lease in leases.get("dhcp6_leases") or []:
@@ -113,7 +137,18 @@ def parse_openwrt_hosts(
             if not ip or not hostname:
                 continue
             key = f"mac:{mac}" if mac else f"ipv6:{ip}"
-            add(key, hostname, ip, mac, active=True, address_source="dhcp")
+            reserved = None
+            if static_macs is not None and mac:
+                reserved = mac in static_macs
+            add(
+                key,
+                hostname,
+                ip,
+                mac,
+                active=True,
+                address_source="dhcp",
+                static_dhcp=reserved,
+            )
 
     for raw_mac, hint in hints.items():
         if not isinstance(hint, dict):
@@ -128,7 +163,47 @@ def parse_openwrt_hosts(
         if not ip:
             continue
         key = f"mac:{mac}" if mac else f"ip:{ip}"
-        add(key, hostname, ip, mac, active=False)
+        reserved = None
+        address_source = ""
+        if static_macs is not None and mac and mac in static_macs:
+            reserved = True
+            address_source = "dhcp"
+        add(
+            key,
+            hostname,
+            ip,
+            mac,
+            active=False,
+            address_source=address_source,
+            static_dhcp=reserved,
+        )
+
+    for entry in static_leases or []:
+        if not isinstance(entry, dict):
+            continue
+        hostname = str(entry.get("name") or "").strip()
+        ip = str(entry.get("ip") or "").strip() or None
+        macs = [
+            str(mac).strip().lower()
+            for mac in (entry.get("macs") or [])
+            if str(mac).strip()
+        ]
+        if not hostname and not ip and not macs:
+            continue
+        mac = macs[0] if macs else None
+        key = f"mac:{mac}" if mac else (f"ip:{ip}" if ip else f"name:{hostname.lower()}")
+        existing = records.get(key)
+        if existing is not None and ip and existing.ip and existing.ip != ip:
+            key = f"ip:{ip}"
+        add(
+            key,
+            hostname or ip or mac or "",
+            ip,
+            mac,
+            active=False,
+            address_source="dhcp",
+            static_dhcp=True,
+        )
 
     result = list(records.values())
     result.sort(key=lambda record: (record.hostname.lower(), record.key))

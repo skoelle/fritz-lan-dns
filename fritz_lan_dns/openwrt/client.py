@@ -157,6 +157,30 @@ class OpenWrtClient:
     def get_host_hints(self) -> dict[str, Any]:
         return self._call_first("getHostHints")
 
+    def get_static_leases(self) -> list[dict[str, Any]]:
+        data = self.call("uci", "get", {"config": "dhcp"})
+        values = data.get("values") or {}
+        leases: list[dict[str, Any]] = []
+        for section in values.values():
+            if not isinstance(section, dict):
+                continue
+            if section.get(".type") != "host":
+                continue
+            name = str(section.get("name") or section.get("hostname") or "").strip()
+            ip = str(section.get("ip") or "").strip()
+            raw_macs = section.get("mac") or []
+            if isinstance(raw_macs, str):
+                raw_macs = [raw_macs]
+            macs = [
+                str(mac).strip().lower()
+                for mac in raw_macs
+                if str(mac).strip()
+            ]
+            if not name and not ip and not macs:
+                continue
+            leases.append({"name": name, "ip": ip, "macs": macs})
+        return leases
+
     def get_mwan3_status(self) -> dict[str, Any]:
         return self.call("mwan3", "status", {})
 

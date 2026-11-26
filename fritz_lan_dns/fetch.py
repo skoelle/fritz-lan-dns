@@ -72,13 +72,30 @@ def _fetch_openwrt_hosts(
         hints = client.get_host_hints()
         _write_raw(settings, "openwrt-leases", json.dumps(leases, ensure_ascii=False))
         _write_raw(settings, "openwrt-hints", json.dumps(hints, ensure_ascii=False))
-        hosts = parse_openwrt_hosts(
-            leases, hints, include_ipv6=settings.dns_include_ipv6
-        )
-        return hosts, None
     except Exception as exc:  # noqa: BLE001 - optionaler Abruf darf Fetch nicht stoppen
         LOGGER.warning("OpenWrt-Abruf fehlgeschlagen: %s", exc)
         return [], f"OpenWrt-Abruf fehlgeschlagen: {exc}"
+
+    static_leases: list[dict] | None = None
+    warning = None
+    try:
+        static_leases = client.get_static_leases()
+        _write_raw(
+            settings,
+            "openwrt-static-hosts",
+            json.dumps(static_leases, ensure_ascii=False),
+        )
+    except Exception as exc:  # noqa: BLE001 - optionale Anzeige
+        LOGGER.warning("OpenWrt static_dhcp-Abruf fehlgeschlagen: %s", exc)
+        warning = f"OpenWrt static_dhcp-Abruf fehlgeschlagen: {exc}"
+
+    hosts = parse_openwrt_hosts(
+        leases,
+        hints,
+        include_ipv6=settings.dns_include_ipv6,
+        static_leases=static_leases,
+    )
+    return hosts, warning
 
 
 def _fetch_openwrt_mwan3(

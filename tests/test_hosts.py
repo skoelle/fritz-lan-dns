@@ -160,6 +160,7 @@ def test_ip_mode_meta() -> None:
     assert ip_mode_meta("static", None)["label"] == "🔒 statisch"
     assert ip_mode_meta("dhcp", False)["label"] == "🔄 DHCP"
     assert ip_mode_meta("dhcp", True)["label"] == "📌 DHCP"
+    assert ip_mode_meta("dhcp", True, "openwrt")["title"].startswith("DHCP, OpenWrt")
     assert ip_mode_meta("", None)["label"] == "–"
 
 

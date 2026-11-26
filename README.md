@@ -330,6 +330,8 @@ Verwendet werden:
 - `luci-rpc getDHCPLeases` – aktive IPv4-/IPv6-Leases
 - `luci-rpc getHostHints` – bekannte und statisch konfigurierte Hosts (auch
   offline)
+- `uci get dhcp` – statische DHCP-Reservierungen (`config host`), inkl.
+  `static_dhcp`; fehlende statische Hosts werden als inaktive Hosts ergänzt
 
 Die Hosts werden über die MAC mit den FRITZ!Box-Daten zusammengeführt und
 erscheinen unter derselben `DNS_DOMAIN` in `/hosts` und im DNS. In der
@@ -375,7 +377,8 @@ cat > /usr/share/rpcd/acl.d/ubusro.json <<'EOF'
       "ubus": {
         "session": ["access", "login"],
         "luci-rpc": ["getDHCPLeases", "getHostHints"],
-        "luci": ["getDHCPLeases", "getHostHints"]
+        "luci": ["getDHCPLeases", "getHostHints"],
+        "uci": ["get"]
       }
     },
     "write": {}
@@ -450,11 +453,12 @@ Hosts, DNS und Dashboard zeigen pro Eintrag ein kombiniertes Badge:
 
 Die Zuweisungsart kommt aus TR-064 (`NewAddressSource`), das
 Reservierungs-Flag `static_dhcp` aus der FRITZ!Box-internen `query.lua`.
-Diese Route ist undokumentiert und kann sich mit FRITZ!OS ändern; schlägt der
-Abruf fehl, bleibt die Reservierung unbekannt und der Rest des Abrufs läuft
-weiter. Die dabei verwendete SID wird nicht gespeichert und nicht geloggt.
-`/hosts` hat einen Filter für die Zuweisungsart; `/api/hosts` und `/api/dns`
-enthalten `address_source` und `static_dhcp`.
+Bei OpenWrt kommen die Reservierungen aus `uci get dhcp` (`config host`).
+Diese Routen sind undokumentiert und können sich mit der Firmware ändern;
+schlägt ein Abruf fehl, bleibt die Reservierung unbekannt und der Rest des
+Abrufs läuft weiter. Die dabei verwendeten SIDs werden nicht gespeichert und
+nicht geloggt. `/hosts` hat einen Filter für die Zuweisungsart; `/api/hosts`
+und `/api/dns` enthalten `address_source` und `static_dhcp`.
 
 ## Webinterface
 
