@@ -17,7 +17,10 @@ def test_display_role_hides_default_roles() -> None:
 def test_connection_meta() -> None:
     assert connection_meta("LAN") == ("🔌", "LAN", "lan")
     assert connection_meta("PLC") == ("⚡", "PLC", "plc")
-    assert connection_meta("WLAN 5G") == ("📶", "WLAN 5G", "wlan")
+    assert connection_meta("WLAN") == ("📶", "WLAN", "wlan")
+    assert connection_meta("WLAN 2G") == ("📶", "WLAN 2G", "band-24")
+    assert connection_meta("WLAN 5G") == ("📶", "WLAN 5G", "band-5")
+    assert connection_meta("WLAN 6G") == ("📶", "WLAN 6G", "band-6")
     assert connection_meta("") == ("", "", "")
     assert connection_meta("something") == ("", "", "")
 
@@ -33,3 +36,8 @@ def test_speed_display() -> None:
     }
     assert speed_display(40000, 60000)["css"] == "slow"
     assert speed_display(0, 0)["css"] == "offline"
+    assert speed_display(1000000, 1000000)["label"] == "1000.0 / 1000.0 Mbit/s"
+    assert speed_display(1000000, 1000000, "LAN")["label"] == "1 Gbit/s"
+    assert speed_display(2500000, 2500000, "LAN")["label"] == "2.5 Gbit/s"
+    assert speed_display(100000, 100000, "LAN")["label"] == "100 Mbit/s"
+    assert speed_display(1000000, 1000, "LAN")["label"] == "1000.0 / 1.0 Mbit/s"

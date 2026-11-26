@@ -21,9 +21,9 @@ _CONNECTION_META = {
     "LAN": ("🔌", "LAN", "lan"),
     "PLC": ("⚡", "PLC", "plc"),
     "WLAN": ("📶", "WLAN", "wlan"),
-    "WLAN 2G": ("📶", "WLAN 2G", "wlan"),
-    "WLAN 5G": ("📶", "WLAN 5G", "wlan"),
-    "WLAN 6G": ("📶", "WLAN 6G", "wlan"),
+    "WLAN 2G": ("📶", "WLAN 2G", "band-24"),
+    "WLAN 5G": ("📶", "WLAN 5G", "band-5"),
+    "WLAN 6G": ("📶", "WLAN 6G", "band-6"),
 }
 
 
@@ -47,10 +47,27 @@ def format_kbps(value: int | None) -> str:
     return f"{value / 1000:.1f}"
 
 
-def speed_display(rx_kbps: int | None, tx_kbps: int | None) -> dict[str, str]:
+def _compact_rate(kbps: int) -> str:
+    mbit = kbps / 1000
+    if mbit >= 1000:
+        value = f"{mbit / 1000:.1f}".rstrip("0").rstrip(".")
+        return f"{value} Gbit/s"
+    value = f"{mbit:.1f}".rstrip("0").rstrip(".")
+    return f"{value} Mbit/s"
+
+
+def speed_display(
+    rx_kbps: int | None,
+    tx_kbps: int | None,
+    connection_type: str | None = None,
+) -> dict[str, str]:
     if rx_kbps is None and tx_kbps is None:
         return {"label": "", "icon": "", "css": ""}
-    label = f"{format_kbps(rx_kbps)} / {format_kbps(tx_kbps)} Mbit/s"
+    is_lan = (connection_type or "").strip().upper() == "LAN"
+    if is_lan and rx_kbps is not None and rx_kbps == tx_kbps:
+        label = _compact_rate(rx_kbps)
+    else:
+        label = f"{format_kbps(rx_kbps)} / {format_kbps(tx_kbps)} Mbit/s"
     values = [value for value in (rx_kbps, tx_kbps) if value is not None]
     if not values or max(values) <= 0:
         return {"label": label, "icon": "❌", "css": "offline"}
@@ -560,7 +577,7 @@ def _table_row(
 ) -> dict:
     icon, label, css = connection_meta(node.connection_type)
     rx_kbps, tx_kbps = speed or (node.plc_rx_kbps, node.plc_tx_kbps)
-    speed_view = speed_display(rx_kbps, tx_kbps)
+    speed_view = speed_display(rx_kbps, tx_kbps, node.connection_type)
     return {
         "depth": depth,
         "indent": max(0, depth - 1),

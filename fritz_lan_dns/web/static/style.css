@@ -216,8 +216,8 @@ button:disabled { opacity: 0.6; cursor: wait; }
     background: #eeeeee;
     color: #555555;
 }
-.chip.lan { background: #e8f1ff; color: #1d4f91; }
-.chip.wlan { background: #f3e8ff; color: #6b3fa0; }
+.chip.lan { background: #e6f4ea; color: var(--green); }
+.chip.wlan { background: #eeeeee; color: #555555; }
 .chip.plc { background: #fff4d6; color: #8a5a00; }
 .chip.role-chip { background: #f1f1f1; color: #555555; font-weight: 500; }
 
@@ -228,7 +228,7 @@ button:disabled { opacity: 0.6; cursor: wait; }
 
 .chip.band-24 { background: #e8f1ff; color: #1d4f91; }
 .chip.band-5 { background: #f3e8ff; color: #6b3fa0; }
-.chip.band-6 { background: #e6f4ea; color: var(--green); }
+.chip.band-6 { background: #e0f2f1; color: #0f766e; }
 .chip.band-unknown { background: #eeeeee; color: #555555; }
 
 .utilization, .signal { font-size: 0.8rem; font-weight: 600; white-space: nowrap; }

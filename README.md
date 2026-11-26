@@ -465,7 +465,9 @@ und `/api/dns` enthalten `address_source` und `static_dhcp`.
 - `/` Dashboard: letzter Lauf, Zähler, WLAN, MultiWAN, Konflikte, Historie, Refresh
 - `/topology`: Mesh-Baum und Offline-Geräte; die Spalte „Verbindung“ zeigt bei
   WLAN-Geräten das Band (auch als letztes bekanntes Band bei Offline-Geräten),
-  die Spalte „Speed“ die Link-Rate (RX/TX in Mbit/s)
+  die Spalte „Speed“ die Link-Rate (RX/TX in Mbit/s; LAN kompakt als Gbit/s).
+  Verbindungs-Chips sind pro Typ farbcodiert (LAN grün, WLAN 2,4 GHz blau,
+  WLAN 5 GHz lila, WLAN 6 GHz türkis, PLC orange).
 - `/wlan`: WLAN-Radios pro Gerät, WLAN-Clients inkl. Signal und
   Auffälligkeiten aus dem Ereignisprotokoll (`?all=1` zeigt alle WLAN-Events)
 - `/hosts`: alle bekannten Hosts, Suche, Status- und Quellen-Filter
